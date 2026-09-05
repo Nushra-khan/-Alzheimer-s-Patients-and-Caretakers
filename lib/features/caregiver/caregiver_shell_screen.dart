@@ -29,13 +29,36 @@ class CaregiverShellScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        toolbarHeight: 64,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        title: Row(
           children: [
-            Icon(Icons.shield_rounded, color: AppTheme.primaryColor),
-            SizedBox(width: 8),
-            Text(
-              'Caregiver Portal',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.shield_rounded, color: AppTheme.primaryColor, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAlignment.start,
+              children: [
+                Text(
+                  'Caregiver Portal',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                Text(
+                  'Active Patient Monitoring',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+              ],
             ),
           ],
         ),
@@ -45,7 +68,7 @@ class CaregiverShellScreen extends ConsumerWidget {
             icon: Stack(
               clipBehavior: Clip.none,
               children: [
-                const Icon(Icons.notifications_outlined, size: 28),
+                const Icon(Icons.notifications_outlined, size: 28, color: AppTheme.textPrimary),
                 if (activeAlerts.isNotEmpty)
                   Positioned(
                     right: -2,
@@ -56,10 +79,7 @@ class CaregiverShellScreen extends ConsumerWidget {
                         color: AppTheme.alertRed,
                         shape: BoxShape.circle,
                       ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
+                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
                       child: Text(
                         '${activeAlerts.length}',
                         textAlign: TextAlign.center,
@@ -75,79 +95,109 @@ class CaregiverShellScreen extends ConsumerWidget {
             ),
             onPressed: () => context.go('/caregiver/alerts'),
           ),
+          // Role switch button
+          Container(
+            margin: const EdgeInsets.only(right: 12),
+            child: ActionChip(
+              avatar: const Icon(Icons.person_rounded, size: 18, color: AppTheme.primaryColor),
+              label: const Text(
+                'Patient View',
+                style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
+              ),
+              backgroundColor: AppTheme.primaryContainer,
+              side: BorderSide.none,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              onPressed: () {
+                ref.read(userRoleProvider.notifier).state = UserRole.patient;
+                ref.read(sessionProvider.notifier).enterPreview(UserRole.patient);
+                context.go('/patient/today');
+              },
+            ),
+          ),
         ],
       ),
       body: child,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: selectedIndex,
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) {
-          switch (index) {
-            case 0:
-              context.go('/caregiver/dashboard');
-              break;
-            case 1:
-              context.go('/caregiver/location');
-              break;
-            case 2:
-              context.go('/caregiver/alerts');
-              break;
-            case 3:
-              context.go('/caregiver/schedules');
-              break;
-            case 4:
-              context.go('/caregiver/profile');
-              break;
-          }
-        },
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard_rounded),
-            label: 'Dashboard',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            activeIcon: Icon(Icons.map_rounded),
-            label: 'Location',
-          ),
-          BottomNavigationBarItem(
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.warning_amber_rounded),
-                if (activeAlerts.isNotEmpty)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppTheme.alertRed,
-                        shape: BoxShape.circle,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: NavigationBar(
+          selectedIndex: selectedIndex,
+          height: 72,
+          backgroundColor: Colors.white,
+          indicatorColor: AppTheme.primaryContainer,
+          onDestinationSelected: (index) {
+            switch (index) {
+              case 0:
+                context.go('/caregiver/dashboard');
+                break;
+              case 1:
+                context.go('/caregiver/location');
+                break;
+              case 2:
+                context.go('/caregiver/alerts');
+                break;
+              case 3:
+                context.go('/caregiver/schedules');
+                break;
+              case 4:
+                context.go('/caregiver/profile');
+                break;
+            }
+          },
+          destinations: [
+            const NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined, size: 24),
+              selectedIcon: Icon(Icons.dashboard_rounded, color: AppTheme.primaryColor, size: 26),
+              label: 'Dashboard',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.map_outlined, size: 24),
+              selectedIcon: Icon(Icons.map_rounded, color: AppTheme.primaryColor, size: 26),
+              label: 'Location',
+            ),
+            NavigationDestination(
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.warning_amber_rounded, size: 24),
+                  if (activeAlerts.isNotEmpty)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: const BoxDecoration(
+                          color: AppTheme.alertRed,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
+              selectedIcon: const Icon(Icons.warning_rounded, color: AppTheme.alertRed, size: 26),
+              label: 'Alerts',
             ),
-            activeIcon: const Icon(
-              Icons.warning_rounded,
-              color: AppTheme.alertRed,
+            const NavigationDestination(
+              icon: Icon(Icons.medication_outlined, size: 24),
+              selectedIcon: Icon(Icons.medication_rounded, color: AppTheme.primaryColor, size: 26),
+              label: 'Schedules',
             ),
-            label: 'Alerts',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.medication_outlined),
-            activeIcon: Icon(Icons.medication_rounded),
-            label: 'Schedules',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline_rounded),
-            activeIcon: Icon(Icons.person_rounded),
-            label: 'Profile',
-          ),
-        ],
+            const NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded, size: 24),
+              selectedIcon: Icon(Icons.person_rounded, color: AppTheme.primaryColor, size: 26),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }

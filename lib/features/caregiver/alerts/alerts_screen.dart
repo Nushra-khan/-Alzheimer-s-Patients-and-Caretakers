@@ -22,20 +22,22 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
         : alerts.where((a) => a.status == _statusFilter).toList();
 
     return Scaffold(
+      backgroundColor: AppTheme.backgroundLight,
       body: SafeArea(
         child: Column(
           children: [
             // Status Filter Chips Header
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               color: Colors.white,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
                     FilterChip(
-                      label: Text('All Alerts (${alerts.length})'),
+                      label: Text('All (${alerts.length})'),
                       selected: _statusFilter == null,
+                      selectedColor: AppTheme.primaryContainer,
                       onSelected: (selected) {
                         setState(() {
                           _statusFilter = null;
@@ -62,6 +64,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                         'Acknowledged (${alerts.where((a) => a.status == AlertStatus.acknowledged).length})',
                       ),
                       selected: _statusFilter == AlertStatus.acknowledged,
+                      selectedColor: AppTheme.warningOrangeContainer,
                       onSelected: (selected) {
                         setState(() {
                           _statusFilter = AlertStatus.acknowledged;
@@ -74,6 +77,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                         'Resolved (${alerts.where((a) => a.status == AlertStatus.resolved).length})',
                       ),
                       selected: _statusFilter == AlertStatus.resolved,
+                      selectedColor: AppTheme.successGreenContainer,
                       onSelected: (selected) {
                         setState(() {
                           _statusFilter = AlertStatus.resolved;
@@ -93,18 +97,11 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
-                          Icon(
-                            Icons.check_circle_outline,
-                            size: 64,
-                            color: AppTheme.successGreen,
-                          ),
-                          SizedBox(height: 12),
+                          Icon(Icons.check_circle_outline, size: 64, color: AppTheme.successGreen),
+                          SizedBox(height: 14),
                           Text(
                             'No alerts matching selected filter.',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: AppTheme.textSecondary,
-                            ),
+                            style: TextStyle(fontSize: 16, color: AppTheme.textSecondary),
                           ),
                         ],
                       ),
@@ -119,24 +116,15 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                           onAcknowledge: () {
                             ref
                                 .read(alertsProvider.notifier)
-                                .acknowledgeAlert(
-                                  alert.id,
-                                  'Sunita Sharma (Caregiver)',
-                                );
+                                .acknowledgeAlert(alert.id, 'Sunita Sharma (Caregiver)');
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Alert acknowledged and logged.'),
-                              ),
+                              const SnackBar(content: Text('Alert acknowledged and logged.')),
                             );
                           },
                           onResolve: () {
-                            ref
-                                .read(alertsProvider.notifier)
-                                .resolveAlert(alert.id);
+                            ref.read(alertsProvider.notifier).resolveAlert(alert.id);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Alert marked RESOLVED.'),
-                              ),
+                              const SnackBar(content: Text('Alert marked RESOLVED.')),
                             );
                           },
                         );
@@ -194,33 +182,35 @@ class _AlertCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: alert.status == AlertStatus.active
-              ? cardBorderColor
-              : Colors.grey.shade300,
+          color: alert.status == AlertStatus.active ? cardBorderColor : Colors.grey.shade200,
           width: alert.status == AlertStatus.active ? 2 : 1,
         ),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(18.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAlignment.start,
           children: [
-            // Alert Title Header
+            // Alert Header
             Row(
               children: [
                 CircleAvatar(
                   backgroundColor: iconBgColor.withValues(alpha: 0.15),
                   child: Icon(alertIcon, color: iconBgColor, size: 24),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAlignment.start,
                     children: [
                       Text(
                         alert.title,
@@ -231,10 +221,7 @@ class _AlertCard extends StatelessWidget {
                       ),
                       Text(
                         'Patient: ${alert.patientName} • ${_formatTimeAgo(alert.timestamp)}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
+                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                       ),
                     ],
                   ),
@@ -242,7 +229,7 @@ class _AlertCard extends StatelessWidget {
                 _StatusBadge(status: alert.status),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
             // Description
             Text(
@@ -251,41 +238,31 @@ class _AlertCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
 
-            // Lifecycle Audit Details
+            // Audit Detail Log
             if (alert.acknowledgedBy != null) ...[
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.history_rounded,
-                      size: 16,
-                      color: AppTheme.textSecondary,
-                    ),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.history_rounded, size: 16, color: AppTheme.textSecondary),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Acknowledged by ${alert.acknowledgedBy} (${_formatTimeAgo(alert.acknowledgedAt!)})',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
+                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
             ],
 
-            // Action Buttons
+            // Response Buttons
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -294,34 +271,29 @@ class _AlertCard extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
                       foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: onAcknowledge,
                     icon: const Icon(Icons.check_circle_outline, size: 18),
-                    label: const Text('Acknowledge'),
+                    label: const Text('Acknowledge', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ] else if (alert.status == AlertStatus.acknowledged) ...[
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.successGreen,
                       foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: onResolve,
                     icon: const Icon(Icons.done_all_rounded, size: 18),
-                    label: const Text('Mark Resolved'),
+                    label: const Text('Mark Resolved', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ] else ...[
-                  const Icon(
-                    Icons.task_alt_rounded,
-                    color: AppTheme.successGreen,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 4),
+                  const Icon(Icons.task_alt_rounded, color: AppTheme.successGreen, size: 20),
+                  const SizedBox(width: 6),
                   const Text(
                     'Resolved',
-                    style: TextStyle(
-                      color: AppTheme.successGreen,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(color: AppTheme.successGreen, fontWeight: FontWeight.bold),
                   ),
                 ],
               ],
@@ -370,7 +342,7 @@ class _StatusBadge extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(12),

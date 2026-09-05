@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../../app/theme.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/app_state.dart';
@@ -10,15 +9,16 @@ class SchedulesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final doses = ref.watch(doseInstancesProvider);
+    final medications = ref.watch(medicationsProvider);
     final routines = ref.watch(routinesProvider);
 
     return Scaffold(
+      backgroundColor: AppTheme.backgroundLight,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAlignment.start,
             children: [
               // Header & Add Medication Button
               Row(
@@ -26,85 +26,64 @@ class SchedulesScreen extends ConsumerWidget {
                 children: [
                   const Text(
                     '💊 Medication Schedules',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                   ),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () => _showAddMedicationDialog(context, ref),
                     icon: const Icon(Icons.add_rounded, size: 20),
-                    label: const Text('Add Dose'),
+                    label: const Text('Add Dose', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
 
               // Medication Items List
-              ...doses.map(
-                (dose) => Card(
-                  margin: const EdgeInsets.only(bottom: 12),
+              ...medications.map(
+                (med) => Card(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  elevation: 2,
                   child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
+                    contentPadding: const EdgeInsets.all(18),
                     leading: CircleAvatar(
                       backgroundColor: AppTheme.primaryContainer,
-                      radius: 24,
-                      child: const Icon(
-                        Icons.medication_rounded,
-                        color: AppTheme.primaryColor,
-                      ),
+                      radius: 26,
+                      child: const Icon(Icons.medication_rounded, color: AppTheme.primaryColor, size: 26),
                     ),
                     title: Text(
-                      dose.medicineName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
+                      med.medicineName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                     subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAlignment.start,
                       children: [
                         const SizedBox(height: 4),
-                        Text(
-                          'Dosage: ${dose.dosage} • Time: ${DateFormat.jm().format(dose.scheduledFor)}',
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                        Text(
-                          'Instructions: ${dose.instructions}',
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
+                        Text('Dosage: ${med.dosage} • Time: ${med.time}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text('Instructions: ${med.instructions}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                       ],
                     ),
                     trailing: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: dose.isReportedTaken
-                                ? AppTheme.successGreenContainer
-                                : Colors.orange.shade100,
+                            color: med.isTakenToday ? AppTheme.successGreenContainer : Colors.orange.shade100,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            dose.isReportedTaken ? 'REPORTED' : 'PENDING',
+                            med.isTakenToday ? 'TAKEN' : 'PENDING',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: dose.isReportedTaken
-                                  ? AppTheme.successGreen
-                                  : Colors.orange.shade900,
+                              color: med.isTakenToday ? AppTheme.successGreen : Colors.orange.shade900,
                             ),
                           ),
                         ),
@@ -119,33 +98,28 @@ class SchedulesScreen extends ConsumerWidget {
               // Daily Routine Reminders Management
               const Text(
                 '🌱 Daily Routines & Care Tasks',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
               ...routines.map(
                 (routine) => Card(
-                  margin: const EdgeInsets.only(bottom: 10),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 1,
                   child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     leading: Icon(
-                      routine.isCompleted
-                          ? Icons.task_alt_rounded
-                          : Icons.schedule_rounded,
-                      color: routine.isCompleted
-                          ? AppTheme.successGreen
-                          : AppTheme.primaryColor,
+                      routine.isCompleted ? Icons.task_alt_rounded : Icons.schedule_rounded,
+                      color: routine.isCompleted ? AppTheme.successGreen : AppTheme.primaryColor,
+                      size: 26,
                     ),
-                    title: Text(
-                      routine.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      '${routine.subtitle} • Scheduled: ${routine.time}',
-                    ),
+                    title: Text(routine.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    subtitle: Text('${routine.subtitle} • Scheduled: ${routine.time}'),
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 32),
             ],
           ),
         ),
@@ -156,102 +130,70 @@ class SchedulesScreen extends ConsumerWidget {
   void _showAddMedicationDialog(BuildContext context, WidgetRef ref) {
     final nameCtrl = TextEditingController();
     final dosageCtrl = TextEditingController();
-    var selectedTime = const TimeOfDay(hour: 9, minute: 0);
+    final timeCtrl = TextEditingController(text: '09:00 AM');
     final instCtrl = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Add Scheduled Medication'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Medicine Name (e.g. Donepezil)',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: dosageCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Dosage (e.g. 10mg - 1 Tablet)',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.schedule_rounded),
-                  title: const Text('Scheduled time'),
-                  subtitle: Text(selectedTime.format(ctx)),
-                  onTap: () async {
-                    final picked = await showTimePicker(
-                      context: ctx,
-                      initialTime: selectedTime,
-                    );
-                    if (picked != null) {
-                      setDialogState(() => selectedTime = picked);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: instCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Instructions (e.g. Take with water after food)',
-                  ),
-                ),
-              ],
-            ),
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Add Scheduled Medication'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Medicine Name (e.g. Donepezil)'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: dosageCtrl,
+                decoration: const InputDecoration(labelText: 'Dosage (e.g. 10mg - 1 Tablet)'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: timeCtrl,
+                decoration: const InputDecoration(labelText: 'Scheduled Time (e.g. 08:00 PM)'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: instCtrl,
+                decoration: const InputDecoration(labelText: 'Instructions (e.g. Take with water after food)'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (nameCtrl.text.isNotEmpty) {
-                  final now = DateTime.now();
-                  final scheduledFor = DateTime(
-                    now.year,
-                    now.month,
-                    now.day,
-                    selectedTime.hour,
-                    selectedTime.minute,
-                  );
-                  final newDose = DoseInstance(
-                    id: 'dose-${DateTime.now().microsecondsSinceEpoch}',
-                    medicationId:
-                        'med-${DateTime.now().microsecondsSinceEpoch}',
-                    medicineName: nameCtrl.text,
-                    dosage: dosageCtrl.text.isEmpty
-                        ? '1 Dose'
-                        : dosageCtrl.text,
-                    instructions: instCtrl.text.isEmpty
-                        ? 'As directed'
-                        : instCtrl.text,
-                    scheduledFor: scheduledFor,
-                    status: DoseStatus.scheduled,
-                  );
-                  ref.read(doseInstancesProvider.notifier).addDose(newDose);
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Scheduled ${nameCtrl.text} added cleanly.',
-                      ),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Save Schedule'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              if (nameCtrl.text.isNotEmpty) {
+                final newMed = MedicationSchedule(
+                  id: 'm-${DateTime.now().millisecondsSinceEpoch}',
+                  medicineName: nameCtrl.text,
+                  dosage: dosageCtrl.text.isEmpty ? '1 Dose' : dosageCtrl.text,
+                  instructions: instCtrl.text.isEmpty ? 'As directed' : instCtrl.text,
+                  time: timeCtrl.text,
+                  isTakenToday: false,
+                );
+                ref.read(medicationsProvider.notifier).addMedication(newMed);
+                Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Scheduled ${nameCtrl.text} added cleanly.')),
+                );
+              }
+            },
+            child: const Text('Save Schedule'),
+          ),
+        ],
       ),
     );
   }
