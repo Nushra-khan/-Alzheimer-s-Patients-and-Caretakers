@@ -1,8 +1,8 @@
-# Alzheimer’s Care — Production Project Plan
+# Memora — Production Project Plan
 
 ## 1. Project overview
 
-Alzheimer’s Care is a mobile caregiver-support application for people living
+Memora is a mobile caregiver-support application for people living
 with Alzheimer’s disease or related cognitive impairment. It provides reminders,
 patient-authorized location sharing, safe-zone monitoring, SOS events, caregiver
 alerts, response tracking, and activity summaries.

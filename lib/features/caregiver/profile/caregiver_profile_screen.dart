@@ -181,9 +181,9 @@ class _CaregiverProfileScreenState
                 foregroundColor: AppTheme.alertRed,
                 side: const BorderSide(color: AppTheme.alertRed),
               ),
-              onPressed: () {
-                ref.read(sessionProvider.notifier).signOut();
-                context.go('/welcome');
+              onPressed: () async {
+                await ref.read(sessionProvider.notifier).signOut();
+                if (context.mounted) context.go('/login');
               },
               icon: const Icon(Icons.logout_rounded),
               label: const Text('Sign Out'),

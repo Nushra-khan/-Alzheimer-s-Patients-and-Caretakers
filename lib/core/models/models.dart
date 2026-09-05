@@ -3,22 +3,13 @@ enum UserRole { patient, caregiver }
 class AppSession {
   final UserRole? role;
   final bool isAuthenticated;
-  final bool isPreview;
 
-  const AppSession._({
-    required this.role,
-    required this.isAuthenticated,
-    required this.isPreview,
-  });
+  const AppSession._({required this.role, required this.isAuthenticated});
 
-  const AppSession.signedOut()
-    : this._(role: null, isAuthenticated: false, isPreview: false);
+  const AppSession.signedOut() : this._(role: null, isAuthenticated: false);
 
   const AppSession.authenticated(UserRole role)
-    : this._(role: role, isAuthenticated: true, isPreview: false);
-
-  const AppSession.preview(UserRole role)
-    : this._(role: role, isAuthenticated: false, isPreview: true);
+    : this._(role: role, isAuthenticated: true);
 
   bool get canAccessPatient => role == UserRole.patient;
   bool get canAccessCaregiver => role == UserRole.caregiver;

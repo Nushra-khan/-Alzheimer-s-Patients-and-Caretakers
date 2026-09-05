@@ -373,7 +373,7 @@ create policy profiles_linked_patient_select on public.profiles for select
   using (
     exists (
       select 1 from public.patients p
-      where p.profile_id = id and private.can_access_patient(p.id)
+      where p.profile_id = profiles.id and private.can_access_patient(p.id)
     )
   );
 create policy profiles_self_update on public.profiles for update

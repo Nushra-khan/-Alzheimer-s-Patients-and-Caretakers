@@ -1,23 +1,92 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../features/auth/auth_service.dart';
+import '../config/app_config.dart';
 import '../models/models.dart';
 
 class SessionNotifier extends StateNotifier<AppSession> {
-  SessionNotifier() : super(const AppSession.signedOut());
+  SessionNotifier() : super(const AppSession.signedOut()) {
+    if (AppConfig.hasSupabaseConfiguration) {
+      _authService = AuthService(Supabase.instance.client);
+      _authSubscription = _authService!.authStateChanges.listen((authState) {
+        if (authState.session == null) {
+          state = const AppSession.signedOut();
+        } else {
+          unawaited(refreshAuthenticatedSession());
+        }
+      });
 
-  void enterPreview(UserRole role) {
-    if (!kDebugMode) {
-      throw StateError('Preview sessions are disabled in release builds.');
+      if (_authService!.currentSession != null) {
+        unawaited(refreshAuthenticatedSession());
+      }
     }
-    state = AppSession.preview(role);
+  }
+
+  AuthService? _authService;
+  StreamSubscription<AuthState>? _authSubscription;
+
+  AuthService get _configuredAuth =>
+      _authService ??
+      (throw StateError(
+        'Supabase is not configured. Start the app with the staging config.',
+      ));
+
+  Future<void> signInWithPassword({
+    required String email,
+    required String password,
+  }) async {
+    final role = await _configuredAuth.signInWithPassword(
+      email: email,
+      password: password,
+    );
+    establishAuthenticatedSession(role);
+  }
+
+  Future<bool> signUp({
+    required String displayName,
+    required String email,
+    required String password,
+    required UserRole role,
+  }) async {
+    final signedIn = await _configuredAuth.signUp(
+      displayName: displayName,
+      email: email,
+      password: password,
+      role: role,
+    );
+    if (signedIn) await refreshAuthenticatedSession();
+    return signedIn;
+  }
+
+  Future<void> signInWithGoogle() => _configuredAuth.signInWithGoogle();
+
+  Future<void> refreshAuthenticatedSession() async {
+    try {
+      final role = await _configuredAuth.resolveCurrentUserRole();
+      establishAuthenticatedSession(role);
+    } catch (_) {
+      state = const AppSession.signedOut();
+    }
   }
 
   void establishAuthenticatedSession(UserRole role) {
     state = AppSession.authenticated(role);
   }
 
-  void signOut() {
+  Future<void> signOut() async {
+    if (_authService?.currentSession != null) {
+      await _authService!.signOut();
+    }
     state = const AppSession.signedOut();
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 }
 

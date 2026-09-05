@@ -30,6 +30,16 @@ begin
     raise exception 'dose not found' using errcode = 'P0002';
   end if;
 
+  if exists (
+    select 1
+    from public.dose_events existing
+    where existing.idempotency_key = request_idempotency_key
+      and existing.dose_instance_id <> target.id
+  ) then
+    raise exception 'idempotency key belongs to another dose'
+      using errcode = '22023';
+  end if;
+
   insert into public.dose_events (
     dose_instance_id,
     actor_profile_id,
@@ -147,6 +157,10 @@ declare
   target_patient_id uuid;
   actor_caregiver_id uuid;
 begin
+  if nullif(trim(request_idempotency_key), '') is null then
+    raise exception 'idempotency key is required' using errcode = '22023';
+  end if;
+
   select patient_id into target_patient_id
   from public.alerts where id = target_alert_id for update;
 
@@ -156,6 +170,19 @@ begin
 
   select id into actor_caregiver_id
   from public.caregivers where profile_id = auth.uid();
+
+  if exists (
+    select 1
+    from public.alert_events existing
+    where existing.idempotency_key = request_idempotency_key
+      and (
+        existing.alert_id <> target_alert_id
+        or existing.event_type <> 'acknowledged'
+      )
+  ) then
+    raise exception 'idempotency key belongs to another action'
+      using errcode = '22023';
+  end if;
 
   insert into public.alert_events (
     alert_id, actor_profile_id, event_type, idempotency_key
@@ -190,6 +217,10 @@ declare
   target_patient_id uuid;
   actor_caregiver_id uuid;
 begin
+  if nullif(trim(request_idempotency_key), '') is null then
+    raise exception 'idempotency key is required' using errcode = '22023';
+  end if;
+
   select patient_id into target_patient_id
   from public.alerts where id = target_alert_id for update;
 
@@ -199,6 +230,19 @@ begin
 
   select id into actor_caregiver_id
   from public.caregivers where profile_id = auth.uid();
+
+  if exists (
+    select 1
+    from public.alert_events existing
+    where existing.idempotency_key = request_idempotency_key
+      and (
+        existing.alert_id <> target_alert_id
+        or existing.event_type <> 'resolved'
+      )
+  ) then
+    raise exception 'idempotency key belongs to another action'
+      using errcode = '22023';
+  end if;
 
   insert into public.alert_events (
     alert_id, actor_profile_id, event_type, details, idempotency_key

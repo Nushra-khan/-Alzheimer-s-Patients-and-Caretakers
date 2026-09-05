@@ -1,9 +1,11 @@
 class AppConfig {
   static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+  static const supabasePublishableKey = String.fromEnvironment(
+    'SUPABASE_PUBLISHABLE_KEY',
+  );
 
   static bool get hasSupabaseConfiguration =>
-      supabaseUrl.trim().isNotEmpty && supabaseAnonKey.trim().isNotEmpty;
+      supabaseUrl.trim().isNotEmpty && supabasePublishableKey.trim().isNotEmpty;
 
   const AppConfig._();
 }
