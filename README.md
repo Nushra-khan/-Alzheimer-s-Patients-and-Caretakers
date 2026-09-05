@@ -1,4 +1,6 @@
-# Alzheimer’s Care
+# Memora
+
+_Remember. Connect. Care._
 
 Caregiver-support mobile application for reminders, patient-authorized location
 sharing, SOS events, and caregiver alert acknowledgement.
@@ -20,7 +22,7 @@ the public client configuration at build time:
 ```powershell
 flutter run `
   --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co `
-  --dart-define=SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_KEY
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
 Never pass a Supabase service-role key to a Flutter build.

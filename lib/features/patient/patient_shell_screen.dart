@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
+import '../../core/models/models.dart';
 import '../../core/providers/app_state.dart';
 
 class PatientShellScreen extends ConsumerWidget {
@@ -23,14 +24,24 @@ class PatientShellScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 64,
+        elevation: 0,
+        backgroundColor: Colors.white,
         title: Row(
           children: [
-            const CircleAvatar(
-              backgroundColor: AppTheme.primaryContainer,
-              radius: 18,
-              child: Icon(Icons.person, color: AppTheme.primaryColor, size: 22),
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.primaryColor, width: 2),
+              ),
+              child: const CircleAvatar(
+                backgroundColor: AppTheme.primaryContainer,
+                radius: 18,
+                child: Icon(Icons.person, color: AppTheme.primaryColor, size: 22),
+              ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -39,37 +50,70 @@ class PatientShellScreen extends ConsumerWidget {
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
-                Text(
-                  'Last Sync: ${_formatTimeAgo(patient.lastSyncTime)}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.successGreen,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Synced ${_formatTimeAgo(patient.lastSyncTime)}',
+                      style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    ),
+                  ],
                 ),
               ],
             ),
           ],
         ),
+        actions: [
+          // Caregiver View Switcher Badge
+          Container(
+            margin: const EdgeInsets.only(right: 14),
+            child: ActionChip(
+              avatar: const Icon(Icons.swap_horiz_rounded, size: 18, color: AppTheme.primaryColor),
+              label: const Text(
+                'Caregiver View',
+                style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
+              ),
+              backgroundColor: AppTheme.primaryContainer,
+              side: BorderSide.none,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              onPressed: () {
+                ref.read(userRoleProvider.notifier).state = UserRole.caregiver;
+                ref.read(sessionProvider.notifier).enterPreview(UserRole.caregiver);
+                context.go('/caregiver/dashboard');
+              },
+            ),
+          ),
+        ],
       ),
       body: child,
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
+          color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black12,
-              blurRadius: 10,
-              offset: Offset(0, -2),
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, -4),
             ),
           ],
         ),
-        child: BottomNavigationBar(
-          currentIndex: selectedIndex,
-          iconSize: 32,
-          selectedFontSize: 15,
-          unselectedFontSize: 14,
-          onTap: (index) {
+        child: NavigationBar(
+          selectedIndex: selectedIndex,
+          height: 72,
+          backgroundColor: Colors.white,
+          indicatorColor: AppTheme.primaryContainer,
+          onDestinationSelected: (index) {
             switch (index) {
               case 0:
                 context.go('/patient/today');
@@ -82,24 +126,20 @@ class PatientShellScreen extends ConsumerWidget {
                 break;
             }
           },
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.today_rounded),
-              activeIcon: Icon(Icons.today_rounded, size: 36),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.today_outlined, size: 26),
+              selectedIcon: Icon(Icons.today_rounded, color: AppTheme.primaryColor, size: 28),
               label: 'Today',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.warning_amber_rounded, color: AppTheme.alertRed),
-              activeIcon: Icon(
-                Icons.warning_rounded,
-                color: AppTheme.alertRed,
-                size: 38,
-              ),
+            NavigationDestination(
+              icon: Icon(Icons.warning_amber_rounded, color: AppTheme.alertRed, size: 28),
+              selectedIcon: Icon(Icons.warning_rounded, color: AppTheme.alertRed, size: 30),
               label: 'SOS Emergency',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings_rounded),
-              activeIcon: Icon(Icons.settings_rounded, size: 36),
+            NavigationDestination(
+              icon: Icon(Icons.settings_outlined, size: 26),
+              selectedIcon: Icon(Icons.settings_rounded, color: AppTheme.primaryColor, size: 28),
               label: 'Settings',
             ),
           ],

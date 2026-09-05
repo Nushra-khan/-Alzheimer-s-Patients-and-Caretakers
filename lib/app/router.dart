@@ -2,8 +2,8 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/providers/app_state.dart';
-import '../features/onboarding/welcome_screen.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/signup_screen.dart';
 import '../features/patient/patient_shell_screen.dart';
 import '../features/patient/today/today_screen.dart';
 import '../features/patient/sos/sos_screen.dart';
@@ -20,25 +20,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final session = ref.watch(sessionProvider);
 
   return GoRouter(
-    initialLocation: '/welcome',
+    initialLocation: '/login',
     redirect: (context, state) {
       final path = state.uri.path;
-      final isPublic = path == '/welcome' || path == '/login';
+      final isPublic = path == '/login' || path == '/signup';
+      if (isPublic && session.isAuthenticated) {
+        return session.canAccessPatient
+            ? '/patient/today'
+            : '/caregiver/dashboard';
+      }
       if (isPublic) return null;
       if (path.startsWith('/patient') && !session.canAccessPatient) {
-        return '/welcome';
+        return '/login';
       }
       if (path.startsWith('/caregiver') && !session.canAccessCaregiver) {
-        return '/welcome';
+        return '/login';
       }
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/welcome',
-        builder: (context, state) => const WelcomeScreen(),
-      ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/signup',
+        builder: (context, state) => const SignupScreen(),
+      ),
       // Patient Navigation Shell
       ShellRoute(
         builder: (context, state, child) {
