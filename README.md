@@ -25,4 +25,4 @@ flutter run `
   --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
-Never pass a Supabase service-role key to a Flutter build.
+Never pass a Supabase service-role key to a Flutter build,,,,,
