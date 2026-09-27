@@ -9,6 +9,8 @@ This application is not an emergency service, diagnostic tool, or replacement
 for professional medical care. See [PLAN.md](./PLAN.md) for the feature scope,
 architecture, delivery phases, and production release gates.
 
+
+
 ## Current status
 
 The Flutter interface and backend contract are under active development. Mock data
