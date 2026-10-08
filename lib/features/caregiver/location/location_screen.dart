@@ -11,6 +11,7 @@ class LocationScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final patient = ref.watch(patientProvider);
     final safeZone = ref.watch(safeZoneProvider);
+    final isDemoMode = ref.watch(careRepositoryProvider) == null;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
@@ -35,7 +36,9 @@ class LocationScreen extends ConsumerWidget {
                       safeZone.isPatientInside
                           ? Icons.my_location_rounded
                           : Icons.location_off_rounded,
-                      color: safeZone.isPatientInside ? AppTheme.successGreen : AppTheme.alertRed,
+                      color: safeZone.isPatientInside
+                          ? AppTheme.successGreen
+                          : AppTheme.alertRed,
                       size: 24,
                     ),
                   ),
@@ -46,19 +49,29 @@ class LocationScreen extends ConsumerWidget {
                       children: [
                         Text(
                           patient.lastKnownLocationName,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         const Text(
-                          'GPS Accuracy: ±12m • Updated 3 mins ago',
-                          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                          'Updated 3 min ago',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.tune_rounded, color: AppTheme.primaryColor, size: 26),
-                    tooltip: 'Configure Safe Zone Radius',
+                    icon: const Icon(
+                      Icons.tune_rounded,
+                      color: AppTheme.primaryColor,
+                      size: 26,
+                    ),
+                    tooltip: 'Safe zone',
                     onPressed: () {
                       _showSafeZoneSettingsDialog(context, ref, safeZone);
                     },
@@ -87,13 +100,20 @@ class LocationScreen extends ConsumerWidget {
                           children: [
                             // Geofence Circle representation
                             Container(
-                              width: (safeZone.radiusMeters / 300 * 210).clamp(130, 290),
-                              height: (safeZone.radiusMeters / 300 * 210).clamp(130, 290),
+                              width: (safeZone.radiusMeters / 300 * 210).clamp(
+                                130,
+                                290,
+                              ),
+                              height: (safeZone.radiusMeters / 300 * 210).clamp(
+                                130,
+                                290,
+                              ),
                               decoration: BoxDecoration(
-                                color: (safeZone.isPatientInside
-                                        ? AppTheme.primaryColor
-                                        : AppTheme.alertRed)
-                                    .withValues(alpha: 0.16),
+                                color:
+                                    (safeZone.isPatientInside
+                                            ? AppTheme.primaryColor
+                                            : AppTheme.alertRed)
+                                        .withValues(alpha: 0.16),
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: safeZone.isPatientInside
@@ -115,12 +135,18 @@ class LocationScreen extends ConsumerWidget {
                                           : AppTheme.alertRed,
                                     ),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: Colors.white,
                                         borderRadius: BorderRadius.circular(12),
                                         boxShadow: const [
-                                          BoxShadow(color: Colors.black26, blurRadius: 6),
+                                          BoxShadow(
+                                            color: Colors.black26,
+                                            blurRadius: 6,
+                                          ),
                                         ],
                                       ),
                                       child: Text(
@@ -154,41 +180,51 @@ class LocationScreen extends ConsumerWidget {
                           elevation: 3,
                           onPressed: () {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Map centered on patient position.')),
+                              const SnackBar(content: Text('Map centered')),
                             );
                           },
                           child: const Icon(Icons.center_focus_strong_rounded),
                         ),
-                        const SizedBox(height: 10),
-                        FloatingActionButton.small(
-                          heroTag: 'simulate',
-                          backgroundColor: safeZone.isPatientInside
-                              ? AppTheme.alertRed
-                              : AppTheme.successGreen,
-                          foregroundColor: Colors.white,
-                          elevation: 3,
-                          onPressed: () {
-                            ref.read(safeZoneProvider.notifier).togglePatientInside();
-                            final newInside = ref.read(safeZoneProvider).isPatientInside;
-                            if (!newInside) {
+                        if (isDemoMode) const SizedBox(height: 10),
+                        if (isDemoMode)
+                          FloatingActionButton.small(
+                            heroTag: 'simulate',
+                            backgroundColor: safeZone.isPatientInside
+                                ? AppTheme.alertRed
+                                : AppTheme.successGreen,
+                            foregroundColor: Colors.white,
+                            elevation: 3,
+                            onPressed: () {
                               ref
-                                  .read(alertsProvider.notifier)
-                                  .acknowledgeAlert('alt-102', 'System Advisory');
-                            }
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  newInside
-                                      ? 'Simulated location: Patient returned INSIDE Safe Zone.'
-                                      : 'Simulated location: Patient exited Safe Zone! Alert created.',
+                                  .read(safeZoneProvider.notifier)
+                                  .togglePatientInside();
+                              final newInside = ref
+                                  .read(safeZoneProvider)
+                                  .isPatientInside;
+                              if (!newInside) {
+                                ref
+                                    .read(alertsProvider.notifier)
+                                    .acknowledgeAlert(
+                                      'alt-102',
+                                      'System Advisory',
+                                    );
+                              }
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    newInside
+                                        ? 'Patient inside safe zone'
+                                        : 'Patient outside safe zone',
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                          child: Icon(
-                            safeZone.isPatientInside ? Icons.directions_run : Icons.home_rounded,
+                              );
+                            },
+                            child: Icon(
+                              safeZone.isPatientInside
+                                  ? Icons.directions_run
+                                  : Icons.home_rounded,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -204,7 +240,11 @@ class LocationScreen extends ConsumerWidget {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: const [
-                          BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4)),
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 12,
+                            offset: Offset(0, 4),
+                          ),
                         ],
                       ),
                       child: Column(
@@ -215,10 +255,16 @@ class LocationScreen extends ConsumerWidget {
                             children: [
                               Text(
                                 safeZone.name,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: safeZone.isPatientInside
                                       ? AppTheme.successGreenContainer
@@ -226,7 +272,9 @@ class LocationScreen extends ConsumerWidget {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  safeZone.isPatientInside ? 'SAFE ZONE' : 'OUTSIDE BOUNDARY',
+                                  safeZone.isPatientInside
+                                      ? 'SAFE ZONE'
+                                      : 'OUTSIDE BOUNDARY',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -240,8 +288,11 @@ class LocationScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Configured Safe Radius: ${safeZone.radiusMeters.toInt()} meters • PostGIS Active',
-                            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                            'Radius: ${safeZone.radiusMeters.toInt()} m',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textSecondary,
+                            ),
                           ),
                         ],
                       ),
@@ -267,17 +318,22 @@ class LocationScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setStateDialog) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Configure Safe Zone Radius'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text('Safe zone'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Zone Name: ${safeZone.name}'),
+              Text(safeZone.name),
               const SizedBox(height: 16),
               Text(
-                'Radius Boundary: ${tempRadius.toInt()} meters',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                'Radius: ${tempRadius.toInt()} m',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
               Slider(
                 value: tempRadius,
@@ -294,7 +350,7 @@ class LocationScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Exiting this radius boundary triggers an automatic caregiver notification.',
+                'Alerts when patient leaves this area',
                 style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
               ),
             ],
@@ -309,16 +365,24 @@ class LocationScreen extends ConsumerWidget {
                 backgroundColor: AppTheme.primaryColor,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () {
-                ref.read(safeZoneProvider.notifier).updateRadius(tempRadius);
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Safe-zone radius updated to ${tempRadius.toInt()}m.'),
-                  ),
-                );
+              onPressed: () async {
+                try {
+                  await ref
+                      .read(safeZoneProvider.notifier)
+                      .updateRadius(tempRadius);
+                  if (!context.mounted) return;
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Safe zone updated')),
+                  );
+                } catch (_) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Unable to update')),
+                  );
+                }
               },
-              child: const Text('Save Radius'),
+              child: const Text('Save'),
             ),
           ],
         ),

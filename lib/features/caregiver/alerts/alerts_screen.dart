@@ -17,6 +17,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
   @override
   Widget build(BuildContext context) {
     final alerts = ref.watch(alertsProvider);
+    final caregiver = ref.watch(currentCaregiverProvider);
     final filteredAlerts = _statusFilter == null
         ? alerts
         : alerts.where((a) => a.status == _statusFilter).toList();
@@ -97,11 +98,18 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
-                          Icon(Icons.check_circle_outline, size: 64, color: AppTheme.successGreen),
+                          Icon(
+                            Icons.check_circle_outline,
+                            size: 64,
+                            color: AppTheme.successGreen,
+                          ),
                           SizedBox(height: 14),
                           Text(
-                            'No alerts matching selected filter.',
-                            style: TextStyle(fontSize: 16, color: AppTheme.textSecondary),
+                            'No alerts',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: AppTheme.textSecondary,
+                            ),
                           ),
                         ],
                       ),
@@ -113,19 +121,43 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                         final alert = filteredAlerts[index];
                         return _AlertCard(
                           alert: alert,
-                          onAcknowledge: () {
-                            ref
-                                .read(alertsProvider.notifier)
-                                .acknowledgeAlert(alert.id, 'Sunita Sharma (Caregiver)');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Alert acknowledged and logged.')),
-                            );
+                          onAcknowledge: () async {
+                            try {
+                              await ref
+                                  .read(alertsProvider.notifier)
+                                  .acknowledgeAlert(alert.id, caregiver.name);
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Alert acknowledged'),
+                                ),
+                              );
+                            } catch (_) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Unable to update'),
+                                ),
+                              );
+                            }
                           },
-                          onResolve: () {
-                            ref.read(alertsProvider.notifier).resolveAlert(alert.id);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Alert marked RESOLVED.')),
-                            );
+                          onResolve: () async {
+                            try {
+                              await ref
+                                  .read(alertsProvider.notifier)
+                                  .resolveAlert(alert.id);
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Alert resolved')),
+                              );
+                            } catch (_) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Unable to update'),
+                                ),
+                              );
+                            }
                           },
                         );
                       },
@@ -184,7 +216,9 @@ class _AlertCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: alert.status == AlertStatus.active ? cardBorderColor : Colors.grey.shade200,
+          color: alert.status == AlertStatus.active
+              ? cardBorderColor
+              : Colors.grey.shade200,
           width: alert.status == AlertStatus.active ? 2 : 1,
         ),
         boxShadow: [
@@ -198,7 +232,7 @@ class _AlertCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(18.0),
         child: Column(
-          crossAxisAlignment: CrossAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Alert Header
             Row(
@@ -210,7 +244,7 @@ class _AlertCard extends StatelessWidget {
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         alert.title,
@@ -220,8 +254,11 @@ class _AlertCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Patient: ${alert.patientName} • ${_formatTimeAgo(alert.timestamp)}',
-                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                        '${alert.patientName} • ${_formatTimeAgo(alert.timestamp)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -241,19 +278,29 @@ class _AlertCard extends StatelessWidget {
             // Audit Detail Log
             if (alert.acknowledgedBy != null) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.history_rounded, size: 16, color: AppTheme.textSecondary),
+                    const Icon(
+                      Icons.history_rounded,
+                      size: 16,
+                      color: AppTheme.textSecondary,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Acknowledged by ${alert.acknowledgedBy} (${_formatTimeAgo(alert.acknowledgedAt!)})',
-                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                        '${alert.acknowledgedBy} • ${_formatTimeAgo(alert.acknowledgedAt!)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ),
                   ],
@@ -271,29 +318,46 @@ class _AlertCard extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onPressed: onAcknowledge,
                     icon: const Icon(Icons.check_circle_outline, size: 18),
-                    label: const Text('Acknowledge', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text(
+                      'Acknowledge',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ] else if (alert.status == AlertStatus.acknowledged) ...[
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.successGreen,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onPressed: onResolve,
                     icon: const Icon(Icons.done_all_rounded, size: 18),
-                    label: const Text('Mark Resolved', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text(
+                      'Resolve',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ] else ...[
-                  const Icon(Icons.task_alt_rounded, color: AppTheme.successGreen, size: 20),
+                  const Icon(
+                    Icons.task_alt_rounded,
+                    color: AppTheme.successGreen,
+                    size: 20,
+                  ),
                   const SizedBox(width: 6),
                   const Text(
                     'Resolved',
-                    style: TextStyle(color: AppTheme.successGreen, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: AppTheme.successGreen,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ],

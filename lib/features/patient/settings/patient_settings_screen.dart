@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
-import '../../../core/models/models.dart';
 import '../../../core/providers/app_state.dart';
 
 class PatientSettingsScreen extends ConsumerWidget {
@@ -21,7 +21,9 @@ class PatientSettingsScreen extends ConsumerWidget {
           children: [
             // Profile Card Header
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               elevation: 2,
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
@@ -42,7 +44,7 @@ class PatientSettingsScreen extends ConsumerWidget {
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             patient.name,
@@ -53,7 +55,9 @@ class PatientSettingsScreen extends ConsumerWidget {
                           ),
                           Text(
                             'Age: ${patient.age} • Patient ID: ${patient.id}',
-                            style: const TextStyle(color: AppTheme.textSecondary),
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Row(
@@ -68,10 +72,17 @@ class PatientSettingsScreen extends ConsumerWidget {
                               const SizedBox(width: 4),
                               Text(
                                 '${patient.batteryLevel}% Battery',
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               const SizedBox(width: 12),
-                              const Icon(Icons.wifi_rounded, size: 18, color: AppTheme.successGreen),
+                              const Icon(
+                                Icons.wifi_rounded,
+                                size: 18,
+                                color: AppTheme.successGreen,
+                              ),
                               const SizedBox(width: 4),
                               const Text(
                                 'Connected',
@@ -94,31 +105,40 @@ class PatientSettingsScreen extends ConsumerWidget {
 
             // Location Sharing Toggle Section
             const Text(
-              '📍 Privacy & Location Sharing',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+              'Location',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
             ),
             const SizedBox(height: 10),
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 value: patient.locationSharingEnabled,
                 activeThumbColor: AppTheme.primaryColor,
                 title: const Text(
-                  'Share My Location with Caregivers',
+                  'Share location',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                subtitle: Text(
-                  patient.locationSharingEnabled
-                      ? 'Location sharing ACTIVE for safe-zone protection.'
-                      : 'Location sharing is PAUSED.',
-                  style: TextStyle(
-                    color: patient.locationSharingEnabled ? AppTheme.successGreen : AppTheme.alertRed,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                onChanged: (val) {
-                  ref.read(patientProvider.notifier).toggleLocationSharing();
+                onChanged: (val) async {
+                  try {
+                    await ref
+                        .read(patientProvider.notifier)
+                        .setLocationSharing(val);
+                  } catch (_) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Unable to update')),
+                    );
+                  }
                 },
               ),
             ),
@@ -126,19 +146,28 @@ class PatientSettingsScreen extends ConsumerWidget {
 
             // Approved Caregivers Section
             const Text(
-              '👥 Approved Caregivers',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+              'Caregivers',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
             ),
             const SizedBox(height: 10),
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Column(
                 children: [
                   ...caregivers.map(
                     (cg) => ListTile(
                       leading: const CircleAvatar(
                         backgroundColor: AppTheme.primaryContainer,
-                        child: Icon(Icons.person_rounded, color: AppTheme.primaryColor),
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: AppTheme.primaryColor,
+                        ),
                       ),
                       title: Text(
                         cg.name,
@@ -147,7 +176,10 @@ class PatientSettingsScreen extends ConsumerWidget {
                       subtitle: Text(cg.relationship),
                       trailing: cg.isPrimary
                           ? Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppTheme.primaryContainer,
                                 borderRadius: BorderRadius.circular(12),
@@ -166,35 +198,17 @@ class PatientSettingsScreen extends ConsumerWidget {
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading: const Icon(Icons.qr_code_rounded, color: AppTheme.primaryColor),
-                    title: const Text('Show Caregiver Invitation QR Code', style: TextStyle(fontWeight: FontWeight.w600)),
-                    onTap: () {
-                      _showQrCodeDialog(context);
-                    },
+                    leading: const Icon(
+                      Icons.qr_code_rounded,
+                      color: AppTheme.primaryColor,
+                    ),
+                    title: const Text(
+                      'Caregiver code',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    onTap: () => _showCaregiverCodeDialog(context, ref),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Switch to Caregiver View
-            const Text(
-              '⚙️ App View Switcher',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-            ),
-            const SizedBox(height: 10),
-            Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: ListTile(
-                leading: const Icon(Icons.swap_horiz_rounded, color: AppTheme.primaryColor),
-                title: const Text('Switch to Caregiver Portal View', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Access Caregiver Dashboard & Alert Management'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () {
-                  ref.read(userRoleProvider.notifier).state = UserRole.caregiver;
-                  ref.read(sessionProvider.notifier).enterPreview(UserRole.caregiver);
-                  context.go('/caregiver/dashboard');
-                },
               ),
             ),
             const SizedBox(height: 24),
@@ -205,14 +219,19 @@ class PatientSettingsScreen extends ConsumerWidget {
                 foregroundColor: AppTheme.alertRed,
                 side: const BorderSide(color: AppTheme.alertRed),
                 minimumSize: const Size(double.infinity, 52),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-              onPressed: () {
-                ref.read(sessionProvider.notifier).signOut();
-                context.go('/login');
+              onPressed: () async {
+                await ref.read(sessionProvider.notifier).signOut();
+                if (context.mounted) context.go('/login');
               },
               icon: const Icon(Icons.logout_rounded),
-              label: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              label: const Text(
+                'Sign Out',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
             ),
             const SizedBox(height: 32),
           ],
@@ -221,32 +240,48 @@ class PatientSettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showQrCodeDialog(BuildContext context) {
+  void _showCaregiverCodeDialog(BuildContext context, WidgetRef ref) {
+    final repository = ref.read(careRepositoryProvider);
+    if (repository == null) return;
+    final invitation = repository.createCareInvitation();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Caregiver Invitation QR Code'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 190,
-              height: 190,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.black87, width: 2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.qr_code_2_rounded, size: 150),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'Have your caregiver scan this code with their app to link accounts.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-            ),
-          ],
+        title: const Text('Caregiver code'),
+        content: FutureBuilder<({String token, DateTime expiresAt})>(
+          future: invitation,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const SizedBox(
+                height: 90,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError || snapshot.data == null) {
+              return const Text('Unable to create code');
+            }
+            final token = snapshot.data!.token;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SelectableText(
+                  token,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Copy',
+                  onPressed: () =>
+                      Clipboard.setData(ClipboardData(text: token)),
+                  icon: const Icon(Icons.copy_rounded),
+                ),
+              ],
+            );
+          },
         ),
         actions: [
           TextButton(

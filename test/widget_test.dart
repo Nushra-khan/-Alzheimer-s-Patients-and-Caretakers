@@ -9,8 +9,8 @@ void main() {
   ) async {
     await tester.pumpWidget(const ProviderScope(child: MemoraApp()));
 
-    expect(find.text('Welcome to Memora'), findsOneWidget);
-    expect(find.text('Sign in to continue'), findsOneWidget);
+    expect(find.text('Memora'), findsOneWidget);
+    expect(find.text('Sign in to continue'), findsNothing);
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);
@@ -22,7 +22,7 @@ void main() {
     await tester.tap(find.text('Sign up'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Create account'), findsOneWidget);
+    expect(find.text('Sign up'), findsWidgets);
     expect(find.text('Full name'), findsOneWidget);
     expect(find.text('Confirm password'), findsOneWidget);
   });

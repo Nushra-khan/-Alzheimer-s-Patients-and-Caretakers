@@ -11,12 +11,15 @@ class CaregiverDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final patient = ref.watch(patientProvider);
+    final caregiver = ref.watch(currentCaregiverProvider);
     final safeZone = ref.watch(safeZoneProvider);
-    final medications = ref.watch(medicationsProvider);
+    final medications = ref.watch(doseInstancesProvider);
     final alerts = ref.watch(alertsProvider);
 
-    final activeAlerts = alerts.where((a) => a.status == AlertStatus.active).toList();
-    final pendingMeds = medications.where((m) => !m.isTakenToday).toList();
+    final activeAlerts = alerts
+        .where((a) => a.status == AlertStatus.active)
+        .toList();
+    final pendingMeds = medications.where((m) => !m.isReportedTaken).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
@@ -27,9 +30,12 @@ class CaregiverDashboardScreen extends ConsumerWidget {
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20.0,
+              vertical: 16.0,
+            ),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Active Critical Warning Banners (If any active alerts)
                 if (activeAlerts.isNotEmpty) ...[
@@ -57,7 +63,7 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                         ],
                       ),
                       child: Column(
-                        crossAxisAlignment: CrossAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
@@ -77,7 +83,8 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                                   style: TextStyle(
                                     fontSize: 17,
                                     fontWeight: FontWeight.bold,
-                                    color: alert.severity == AlertSeverity.critical
+                                    color:
+                                        alert.severity == AlertSeverity.critical
                                         ? AppTheme.onAlertRedContainer
                                         : Colors.brown.shade900,
                                   ),
@@ -88,7 +95,10 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                           const SizedBox(height: 6),
                           Text(
                             alert.description,
-                            style: const TextStyle(fontSize: 14, color: Colors.black87),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.black87,
+                            ),
                           ),
                           const SizedBox(height: 14),
                           Row(
@@ -103,18 +113,37 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
-                                onPressed: () {
-                                  ref
-                                      .read(alertsProvider.notifier)
-                                      .acknowledgeAlert(alert.id, 'Sunita Sharma');
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Alert acknowledged! Logged in audit trail.'),
-                                    ),
-                                  );
+                                onPressed: () async {
+                                  try {
+                                    await ref
+                                        .read(alertsProvider.notifier)
+                                        .acknowledgeAlert(
+                                          alert.id,
+                                          caregiver.name,
+                                        );
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Alert acknowledged'),
+                                      ),
+                                    );
+                                  } catch (_) {
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Unable to update'),
+                                      ),
+                                    );
+                                  }
                                 },
-                                icon: const Icon(Icons.check_circle_outline, size: 18),
-                                label: const Text('Acknowledge', style: TextStyle(fontWeight: FontWeight.bold)),
+                                icon: const Icon(
+                                  Icons.check_circle_outline,
+                                  size: 18,
+                                ),
+                                label: const Text(
+                                  'Acknowledge',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ),
                             ],
                           ),
@@ -126,12 +155,14 @@ class CaregiverDashboardScreen extends ConsumerWidget {
 
                 // Patient Overview Hero Card
                 Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   elevation: 2,
                   child: Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
@@ -150,7 +181,7 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     patient.name,
@@ -162,13 +193,19 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                                   ),
                                   Text(
                                     'Age ${patient.age} • ID: ${patient.id}',
-                                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                                    style: const TextStyle(
+                                      color: AppTheme.textSecondary,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: patient.isDeviceOnline
                                     ? AppTheme.successGreenContainer
@@ -181,15 +218,21 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                                   Icon(
                                     Icons.circle,
                                     size: 10,
-                                    color: patient.isDeviceOnline ? AppTheme.successGreen : Colors.grey,
+                                    color: patient.isDeviceOnline
+                                        ? AppTheme.successGreen
+                                        : Colors.grey,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    patient.isDeviceOnline ? 'ONLINE' : 'OFFLINE',
+                                    patient.isDeviceOnline
+                                        ? 'ONLINE'
+                                        : 'OFFLINE',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
-                                      color: patient.isDeviceOnline ? AppTheme.successGreen : Colors.grey,
+                                      color: patient.isDeviceOnline
+                                          ? AppTheme.successGreen
+                                          : Colors.grey,
                                     ),
                                   ),
                                 ],
@@ -214,7 +257,11 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                                     : AppTheme.alertRed,
                               ),
                             ),
-                            Container(width: 1, height: 40, color: Colors.grey.shade200),
+                            Container(
+                              width: 1,
+                              height: 40,
+                              color: Colors.grey.shade200,
+                            ),
                             Expanded(
                               child: _StatusMetricTile(
                                 icon: Icons.sync_rounded,
@@ -223,12 +270,18 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                                 color: AppTheme.primaryColor,
                               ),
                             ),
-                            Container(width: 1, height: 40, color: Colors.grey.shade200),
+                            Container(
+                              width: 1,
+                              height: 40,
+                              color: Colors.grey.shade200,
+                            ),
                             Expanded(
                               child: _StatusMetricTile(
                                 icon: Icons.location_on_rounded,
                                 title: 'Safe Zone',
-                                value: safeZone.isPatientInside ? 'INSIDE' : 'OUTSIDE',
+                                value: safeZone.isPatientInside
+                                    ? 'INSIDE'
+                                    : 'OUTSIDE',
                                 color: safeZone.isPatientInside
                                     ? AppTheme.successGreen
                                     : AppTheme.alertRed,
@@ -244,17 +297,23 @@ class CaregiverDashboardScreen extends ConsumerWidget {
 
                 // Location Summary Preview Card
                 const Text(
-                  '📍 Patient Location & Safe Zone',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                  'Location',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   elevation: 2,
                   child: Padding(
                     padding: const EdgeInsets.all(18.0),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
@@ -279,7 +338,7 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     safeZone.isPatientInside
@@ -295,7 +354,10 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                                   ),
                                   Text(
                                     patient.lastKnownLocationName,
-                                    style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppTheme.textSecondary,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -306,11 +368,16 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(double.infinity, 48),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                           ),
                           onPressed: () => context.go('/caregiver/location'),
                           icon: const Icon(Icons.map_rounded),
-                          label: const Text('Open Interactive Geofence Map', style: TextStyle(fontWeight: FontWeight.bold)),
+                          label: const Text(
+                            'Open map',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
                     ),
@@ -323,18 +390,24 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      '💊 Medication Compliance',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                      'Medications',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
                     ),
                     TextButton(
                       onPressed: () => context.go('/caregiver/schedules'),
-                      child: const Text('Manage Schedules'),
+                      child: const Text('Manage'),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   elevation: 2,
                   child: Padding(
                     padding: const EdgeInsets.all(18.0),
@@ -344,8 +417,11 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Reported Doses: ${medications.length - pendingMeds.length} of ${medications.length}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              '${medications.length - pendingMeds.length} of ${medications.length} taken',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
                             ),
                             Text(
                               '${((medications.length - pendingMeds.length) / (medications.isEmpty ? 1 : medications.length) * 100).toInt()}%',
@@ -363,7 +439,8 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                           child: LinearProgressIndicator(
                             value: medications.isEmpty
                                 ? 0
-                                : (medications.length - pendingMeds.length) / medications.length,
+                                : (medications.length - pendingMeds.length) /
+                                      medications.length,
                             backgroundColor: Colors.grey.shade200,
                             color: AppTheme.primaryColor,
                             minHeight: 8,
@@ -375,26 +452,41 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                             dense: true,
                             contentPadding: EdgeInsets.zero,
                             leading: Icon(
-                              med.isTakenToday ? Icons.check_circle_rounded : Icons.schedule_rounded,
-                              color: med.isTakenToday ? AppTheme.successGreen : Colors.orange,
+                              med.isReportedTaken
+                                  ? Icons.check_circle_rounded
+                                  : Icons.schedule_rounded,
+                              color: med.isReportedTaken
+                                  ? AppTheme.successGreen
+                                  : Colors.orange,
                               size: 24,
                             ),
-                            title: Text(med.medicineName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            subtitle: Text('${med.dosage} • Scheduled: ${med.time}'),
+                            title: Text(
+                              med.medicineName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${med.dosage} • ${TimeOfDay.fromDateTime(med.scheduledFor).format(context)}',
+                            ),
                             trailing: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
-                                color: med.isTakenToday
+                                color: med.isReportedTaken
                                     ? AppTheme.successGreenContainer
                                     : Colors.orange.shade100,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                med.isTakenToday ? 'TAKEN' : 'PENDING',
+                                med.isReportedTaken ? 'TAKEN' : 'PENDING',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: med.isTakenToday
+                                  color: med.isReportedTaken
                                       ? AppTheme.successGreen
                                       : Colors.orange.shade900,
                                 ),
@@ -444,7 +536,11 @@ class _StatusMetricTile extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
         ),
         Text(
           title,
