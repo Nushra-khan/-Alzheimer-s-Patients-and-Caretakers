@@ -1,202 +1,240 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../app/theme.dart';
 import '../../core/models/models.dart';
 import '../../core/providers/app_state.dart';
 
 class CaregiverShellScreen extends ConsumerWidget {
-  final Widget child;
-
   const CaregiverShellScreen({super.key, required this.child});
 
-  int _calculateSelectedIndex(BuildContext context) {
-    final location = GoRouterState.of(context).uri.toString();
+  final Widget child;
+
+  int _selectedIndex(BuildContext context) {
+    final location = GoRouterState.of(context).uri.path;
     if (location.startsWith('/caregiver/location')) return 1;
     if (location.startsWith('/caregiver/alerts')) return 2;
     if (location.startsWith('/caregiver/schedules')) return 3;
     if (location.startsWith('/caregiver/profile')) return 4;
-    return 0; // default /caregiver/dashboard
+    return 0;
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedIndex = _calculateSelectedIndex(context);
-    final activeAlerts = ref
+    final careData = ref.watch(careBootstrapProvider);
+    ref.watch(careRealtimeProvider);
+    final activeAlertCount = ref
         .watch(alertsProvider)
-        .where((a) => a.status == AlertStatus.active)
-        .toList();
+        .where((alert) => alert.status == AlertStatus.active)
+        .length;
 
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 64,
-        elevation: 0,
-        backgroundColor: Colors.white,
+        toolbarHeight: 72,
+        titleSpacing: 18,
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryContainer,
-                shape: BoxShape.circle,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/branding/memora_app_icon.png',
+                width: 42,
+                height: 42,
+                fit: BoxFit.cover,
+                semanticLabel: 'Memora',
               ),
-              child: const Icon(Icons.shield_rounded, color: AppTheme.primaryColor, size: 22),
             ),
             const SizedBox(width: 12),
-            const Column(
-              crossAxisAlignment: CrossAlignment.start,
-              children: [
-                Text(
-                  'Caregiver Portal',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Memora',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                   ),
-                ),
-                Text(
-                  'Active Patient Monitoring',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
         actions: [
-          // Active Alerts Badge Counter
           IconButton(
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.notifications_outlined, size: 28, color: AppTheme.textPrimary),
-                if (activeAlerts.isNotEmpty)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: AppTheme.alertRed,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                      child: Text(
-                        '${activeAlerts.length}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+            tooltip: activeAlertCount == 0
+                ? 'No active alerts'
+                : '$activeAlertCount active alerts',
             onPressed: () => context.go('/caregiver/alerts'),
-          ),
-          // Role switch button
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            child: ActionChip(
-              avatar: const Icon(Icons.person_rounded, size: 18, color: AppTheme.primaryColor),
-              label: const Text(
-                'Patient View',
-                style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
-              ),
-              backgroundColor: AppTheme.primaryContainer,
-              side: BorderSide.none,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              onPressed: () {
-                ref.read(userRoleProvider.notifier).state = UserRole.patient;
-                ref.read(sessionProvider.notifier).enterPreview(UserRole.patient);
-                context.go('/patient/today');
-              },
+            icon: Badge(
+              isLabelVisible: activeAlertCount > 0,
+              label: Text('$activeAlertCount'),
+              backgroundColor: AppTheme.alertRed,
+              child: const Icon(Icons.notifications_outlined),
             ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: careData.when(
+        data: (status) => status == CareBootstrapStatus.needsPatient
+            ? const _ConnectPatientView()
+            : child,
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, _) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Unable to load data'),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => ref.invalidate(careBootstrapProvider),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex(context),
+        onDestinationSelected: (index) {
+          switch (index) {
+            case 0:
+              context.go('/caregiver/dashboard');
+              break;
+            case 1:
+              context.go('/caregiver/location');
+              break;
+            case 2:
+              context.go('/caregiver/alerts');
+              break;
+            case 3:
+              context.go('/caregiver/schedules');
+              break;
+            case 4:
+              context.go('/caregiver/profile');
+              break;
+          }
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.space_dashboard_outlined),
+            selectedIcon: Icon(Icons.space_dashboard_rounded),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.location_on_outlined),
+            selectedIcon: Icon(Icons.location_on_rounded),
+            label: 'Location',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.notifications_none_rounded),
+            selectedIcon: Icon(Icons.notifications_rounded),
+            label: 'Alerts',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.event_note_outlined),
+            selectedIcon: Icon(Icons.event_note_rounded),
+            label: 'Schedule',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Profile',
           ),
         ],
       ),
-      body: child,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: NavigationBar(
-          selectedIndex: selectedIndex,
-          height: 72,
-          backgroundColor: Colors.white,
-          indicatorColor: AppTheme.primaryContainer,
-          onDestinationSelected: (index) {
-            switch (index) {
-              case 0:
-                context.go('/caregiver/dashboard');
-                break;
-              case 1:
-                context.go('/caregiver/location');
-                break;
-              case 2:
-                context.go('/caregiver/alerts');
-                break;
-              case 3:
-                context.go('/caregiver/schedules');
-                break;
-              case 4:
-                context.go('/caregiver/profile');
-                break;
-            }
-          },
-          destinations: [
-            const NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined, size: 24),
-              selectedIcon: Icon(Icons.dashboard_rounded, color: AppTheme.primaryColor, size: 26),
-              label: 'Dashboard',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.map_outlined, size: 24),
-              selectedIcon: Icon(Icons.map_rounded, color: AppTheme.primaryColor, size: 26),
-              label: 'Location',
-            ),
-            NavigationDestination(
-              icon: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  const Icon(Icons.warning_amber_rounded, size: 24),
-                  if (activeAlerts.isNotEmpty)
-                    Positioned(
-                      right: -2,
-                      top: -2,
-                      child: Container(
-                        width: 9,
-                        height: 9,
-                        decoration: const BoxDecoration(
-                          color: AppTheme.alertRed,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
+    );
+  }
+}
+
+class _ConnectPatientView extends ConsumerStatefulWidget {
+  const _ConnectPatientView();
+
+  @override
+  ConsumerState<_ConnectPatientView> createState() =>
+      _ConnectPatientViewState();
+}
+
+class _ConnectPatientViewState extends ConsumerState<_ConnectPatientView> {
+  final _codeController = TextEditingController();
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _connect() async {
+    final repository = ref.read(careRepositoryProvider);
+    if (repository == null || _codeController.text.trim().isEmpty) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await repository.acceptCareInvitation(_codeController.text);
+      ref.invalidate(careBootstrapProvider);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Invalid or expired code');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.link_rounded, size: 52),
+              const SizedBox(height: 12),
+              const Text(
+                'Connect patient',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              selectedIcon: const Icon(Icons.warning_rounded, color: AppTheme.alertRed, size: 26),
-              label: 'Alerts',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.medication_outlined, size: 24),
-              selectedIcon: Icon(Icons.medication_rounded, color: AppTheme.primaryColor, size: 26),
-              label: 'Schedules',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.person_outline_rounded, size: 24),
-              selectedIcon: Icon(Icons.person_rounded, color: AppTheme.primaryColor, size: 26),
-              label: 'Profile',
-            ),
-          ],
+              const SizedBox(height: 20),
+              TextField(
+                controller: _codeController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: 'Invitation code',
+                  errorText: _error,
+                ),
+                onSubmitted: (_) => _connect(),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _loading ? null : _connect,
+                child: _loading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Connect'),
+              ),
+              TextButton(
+                onPressed: _loading
+                    ? null
+                    : () async {
+                        await ref.read(sessionProvider.notifier).signOut();
+                        if (context.mounted) context.go('/login');
+                      },
+                child: const Text('Sign out'),
+              ),
+            ],
+          ),
         ),
       ),
     );

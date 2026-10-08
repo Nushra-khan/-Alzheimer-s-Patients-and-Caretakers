@@ -8,10 +8,10 @@ class TodayScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final medications = ref.watch(medicationsProvider);
+    final medications = ref.watch(doseInstancesProvider);
     final routines = ref.watch(routinesProvider);
-    final upcomingMeds = medications.where((m) => !m.isTakenToday).toList();
-    final takenMedsCount = medications.where((m) => m.isTakenToday).length;
+    final upcomingMeds = medications.where((m) => !m.isReportedTaken).toList();
+    final takenMedsCount = medications.where((m) => m.isReportedTaken).length;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
@@ -22,7 +22,10 @@ class TodayScreen extends ConsumerWidget {
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20.0,
+              vertical: 16.0,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -52,10 +55,14 @@ class TodayScreen extends ConsumerWidget {
                         children: [
                           Row(
                             children: const [
-                              Icon(Icons.wb_sunny_rounded, color: Colors.amber, size: 28),
+                              Icon(
+                                Icons.wb_sunny_rounded,
+                                color: Colors.amber,
+                                size: 28,
+                              ),
                               SizedBox(width: 8),
                               Text(
-                                'Today’s Overview',
+                                'Today',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -65,7 +72,10 @@ class TodayScreen extends ConsumerWidget {
                             ],
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white24,
                               borderRadius: BorderRadius.circular(20),
@@ -84,8 +94,8 @@ class TodayScreen extends ConsumerWidget {
                       const SizedBox(height: 12),
                       Text(
                         upcomingMeds.isEmpty
-                            ? '🎉 Excellent work! All medicines taken.'
-                            : 'You have ${upcomingMeds.length} medicine dose(s) remaining.',
+                            ? 'All medicines taken.'
+                            : '${upcomingMeds.length} dose(s) remaining',
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -98,7 +108,9 @@ class TodayScreen extends ConsumerWidget {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(6),
                         child: LinearProgressIndicator(
-                          value: medications.isEmpty ? 0 : (takenMedsCount / medications.length),
+                          value: medications.isEmpty
+                              ? 0
+                              : (takenMedsCount / medications.length),
                           backgroundColor: Colors.white24,
                           color: AppTheme.primaryContainer,
                           minHeight: 8,
@@ -114,16 +126,12 @@ class TodayScreen extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      '💊 Medication Reminders',
+                      'Medications',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textPrimary,
                       ),
-                    ),
-                    Text(
-                      '${medications.length} Items',
-                      style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary),
                     ),
                   ],
                 ),
@@ -132,26 +140,30 @@ class TodayScreen extends ConsumerWidget {
                 if (medications.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Text('No medications scheduled for today.'),
+                    child: Text('No medication today'),
                   )
                 else
                   ...medications.map(
                     (med) => _MedicationCard(
                       medication: med,
-                      onToggleTaken: () {
-                        ref.read(medicationsProvider.notifier).toggleDoseTaken(med.id);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              med.isTakenToday
-                                  ? 'Marked ${med.medicineName} dose as pending.'
-                                  : 'Reported ${med.medicineName} dose taken! Caregivers notified.',
+                      onToggleTaken: () async {
+                        try {
+                          await ref
+                              .read(doseInstancesProvider.notifier)
+                              .reportDoseTaken(med.id);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Marked as taken'),
+                              backgroundColor: AppTheme.successGreen,
                             ),
-                            backgroundColor:
-                                med.isTakenToday ? Colors.black87 : AppTheme.successGreen,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
+                          );
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Unable to update')),
+                          );
+                        }
                       },
                     ),
                   ),
@@ -163,7 +175,7 @@ class TodayScreen extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      '🌱 Daily Activities & Routines',
+                      'Routine',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -172,7 +184,10 @@ class TodayScreen extends ConsumerWidget {
                     ),
                     Text(
                       '${routines.where((r) => r.isCompleted).length}/${routines.length} Done',
-                      style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -181,8 +196,17 @@ class TodayScreen extends ConsumerWidget {
                 ...routines.map(
                   (routine) => _RoutineCard(
                     routine: routine,
-                    onToggleCompleted: () {
-                      ref.read(routinesProvider.notifier).toggleRoutine(routine.id);
+                    onToggleCompleted: () async {
+                      try {
+                        await ref
+                            .read(routinesProvider.notifier)
+                            .toggleRoutine(routine.id);
+                      } catch (_) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Unable to update')),
+                        );
+                      }
                     },
                   ),
                 ),
@@ -208,13 +232,15 @@ class _MedicationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isTaken = medication.isTakenToday;
+    final bool isTaken = medication.isReportedTaken;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isTaken ? AppTheme.successGreenContainer.withValues(alpha: 0.35) : Colors.white,
+        color: isTaken
+            ? AppTheme.successGreenContainer.withValues(alpha: 0.35)
+            : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isTaken ? AppTheme.successGreen : Colors.grey.shade300,
@@ -229,18 +255,22 @@ class _MedicationCard extends StatelessWidget {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isTaken ? AppTheme.successGreen : AppTheme.primaryContainer,
+                  color: isTaken
+                      ? AppTheme.successGreen
+                      : AppTheme.primaryContainer,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isTaken ? Icons.check_circle_rounded : Icons.medication_rounded,
+                  isTaken
+                      ? Icons.check_circle_rounded
+                      : Icons.medication_rounded,
                   color: isTaken ? Colors.white : AppTheme.primaryColor,
                   size: 28,
                 ),
@@ -255,7 +285,9 @@ class _MedicationCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: isTaken ? AppTheme.successGreen : AppTheme.textPrimary,
+                        color: isTaken
+                            ? AppTheme.successGreen
+                            : AppTheme.textPrimary,
                         decoration: isTaken ? TextDecoration.lineThrough : null,
                       ),
                     ),
@@ -273,7 +305,10 @@ class _MedicationCard extends StatelessWidget {
               ),
               if (isTaken)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.successGreen,
                     borderRadius: BorderRadius.circular(20),
@@ -298,12 +333,19 @@ class _MedicationCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline, size: 18, color: AppTheme.textSecondary),
+                const Icon(
+                  Icons.info_outline,
+                  size: 18,
+                  color: AppTheme.textSecondary,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     medication.instructions,
-                    style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
               ],
@@ -314,16 +356,23 @@ class _MedicationCard extends StatelessWidget {
           // Large Action Button
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: isTaken ? Colors.grey.shade200 : AppTheme.primaryColor,
+              backgroundColor: isTaken
+                  ? Colors.grey.shade200
+                  : AppTheme.primaryColor,
               foregroundColor: isTaken ? Colors.black87 : Colors.white,
               minimumSize: const Size(double.infinity, 54),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
               elevation: isTaken ? 0 : 2,
             ),
             onPressed: onToggleTaken,
-            icon: Icon(isTaken ? Icons.undo_rounded : Icons.check_rounded, size: 24),
+            icon: Icon(
+              isTaken ? Icons.undo_rounded : Icons.check_rounded,
+              size: 24,
+            ),
             label: Text(
-              isTaken ? 'Mark as Not Taken' : 'I TOOK THIS MEDICINE',
+              isTaken ? 'Undo' : 'Mark as taken',
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
             ),
           ),
@@ -337,10 +386,7 @@ class _RoutineCard extends StatelessWidget {
   final dynamic routine;
   final VoidCallback onToggleCompleted;
 
-  const _RoutineCard({
-    required this.routine,
-    required this.onToggleCompleted,
-  });
+  const _RoutineCard({required this.routine, required this.onToggleCompleted});
 
   @override
   Widget build(BuildContext context) {
@@ -351,7 +397,9 @@ class _RoutineCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isCompleted ? Colors.grey.shade100 : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isCompleted ? Colors.grey.shade300 : Colors.grey.shade200),
+        border: Border.all(
+          color: isCompleted ? Colors.grey.shade300 : Colors.grey.shade200,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -364,7 +412,9 @@ class _RoutineCard extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: IconButton(
           icon: Icon(
-            isCompleted ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            isCompleted
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
             color: isCompleted ? AppTheme.successGreen : AppTheme.primaryColor,
             size: 32,
           ),
@@ -380,12 +430,12 @@ class _RoutineCard extends StatelessWidget {
           ),
         ),
         subtitle: Column(
-          crossAxisAlignment: CrossAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(routine.subtitle, style: const TextStyle(fontSize: 13)),
             const SizedBox(height: 2),
             Text(
-              'Time: ${routine.time}',
+              routine.time,
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
