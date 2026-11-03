@@ -48,6 +48,40 @@ void main() {
     expect(notifier.state.first.isCompleted, isNot(routine.isCompleted));
   });
 
+  test('routine schedules can be added, edited, and deactivated', () async {
+    final notifier = RoutineNotifier();
+    final scheduledFor = DateTime(2026, 11, 4, 8);
+    final routine = RoutineItem(
+      id: 'new-routine',
+      title: 'Morning tea',
+      subtitle: 'Prepare one cup of tea',
+      time: '8:00 AM',
+      isCompleted: false,
+    );
+
+    await notifier.addRoutine(
+      routine,
+      patientId: 'patient-1',
+      scheduledFor: scheduledFor,
+    );
+    expect(notifier.state.any((item) => item.id == routine.id), isTrue);
+
+    await notifier.updateRoutine(
+      routineId: routine.id,
+      title: 'Morning breakfast',
+      description: 'Prepare a light breakfast',
+      displayTime: '8:30 AM',
+      scheduledFor: DateTime(2026, 11, 4, 8, 30),
+    );
+    final updated = notifier.state.firstWhere((item) => item.id == routine.id);
+    expect(updated.title, 'Morning breakfast');
+    expect(updated.subtitle, 'Prepare a light breakfast');
+    expect(updated.time, '8:30 AM');
+
+    await notifier.deactivateRoutine(routine.id);
+    expect(notifier.state.any((item) => item.id == routine.id), isFalse);
+  });
+
   test('safe-zone radius can be changed', () async {
     final notifier = SafeZoneNotifier();
 

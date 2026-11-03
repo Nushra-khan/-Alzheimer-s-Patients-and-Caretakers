@@ -156,4 +156,49 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Edit medication'), findsNothing);
   });
+
+  testWidgets('caregiver can open the add-routine form', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: SchedulesScreen())),
+    );
+
+    final addRoutine = find.widgetWithText(OutlinedButton, 'Add');
+    await tester.ensureVisible(addRoutine);
+    await tester.tap(addRoutine);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add routine'), findsWidgets);
+    expect(find.text('Routine title'), findsOneWidget);
+    expect(find.text('Reminder time'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('caregiver must confirm before stopping a routine', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: SchedulesScreen())),
+    );
+
+    final options = find.byTooltip('Routine options for Morning Garden Walk');
+    await tester.ensureVisible(options);
+    await tester.tap(options);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Stop routine'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Stop this routine?'), findsOneWidget);
+    expect(
+      find.textContaining('Past completion records will be kept.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Stop this routine?'), findsNothing);
+  });
 }

@@ -6,6 +6,8 @@ import '../../../core/providers/app_state.dart';
 
 enum _MedicationAction { edit, deactivate }
 
+enum _RoutineAction { edit, deactivate }
+
 class SchedulesScreen extends ConsumerWidget {
   const SchedulesScreen({super.key});
 
@@ -183,13 +185,23 @@ class SchedulesScreen extends ConsumerWidget {
               const SizedBox(height: 28),
 
               // Daily Routine Reminders Management
-              const Text(
-                'Routine',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Routine',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => _showRoutineDialog(context, ref),
+                    icon: const Icon(Icons.add_rounded, size: 20),
+                    label: const Text('Add'),
+                  ),
+                ],
               ),
               const SizedBox(height: 14),
 
@@ -222,6 +234,47 @@ class SchedulesScreen extends ConsumerWidget {
                       ),
                     ),
                     subtitle: Text('${routine.subtitle} • ${routine.time}'),
+                    trailing: PopupMenuButton<_RoutineAction>(
+                      tooltip: 'Routine options for ${routine.title}',
+                      onSelected: (action) {
+                        switch (action) {
+                          case _RoutineAction.edit:
+                            _showRoutineDialog(context, ref, routine: routine);
+                            break;
+                          case _RoutineAction.deactivate:
+                            _confirmRoutineDeactivation(context, ref, routine);
+                            break;
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: _RoutineAction.edit,
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.edit_outlined,
+                                color: AppTheme.primaryColor,
+                              ),
+                              SizedBox(width: 10),
+                              Text('Edit routine'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _RoutineAction.deactivate,
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.remove_circle_outline_rounded,
+                                color: AppTheme.alertRed,
+                              ),
+                              SizedBox(width: 10),
+                              Text('Stop routine'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -231,6 +284,214 @@ class SchedulesScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showRoutineDialog(
+    BuildContext context,
+    WidgetRef ref, {
+    RoutineItem? routine,
+  }) async {
+    final titleController = TextEditingController(text: routine?.title ?? '');
+    final descriptionController = TextEditingController(
+      text: routine?.subtitle ?? '',
+    );
+    final timeController = TextEditingController(
+      text: routine?.time ?? '08:00 AM',
+    );
+    var isSaving = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(routine == null ? 'Add routine' : 'Edit routine'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  enabled: !isSaving,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Routine title',
+                    hintText: 'Morning walk',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descriptionController,
+                  enabled: !isSaving,
+                  textCapitalization: TextCapitalization.sentences,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    hintText: '15-minute gentle walk',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: timeController,
+                  enabled: !isSaving,
+                  decoration: const InputDecoration(
+                    labelText: 'Reminder time',
+                    hintText: '08:00 AM',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final title = titleController.text.trim();
+                      final scheduledFor = _parseScheduledTime(
+                        timeController.text,
+                      );
+                      if (title.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Routine title is required.'),
+                          ),
+                        );
+                        return;
+                      }
+                      if (scheduledFor == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Enter a valid reminder time.'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() => isSaving = true);
+                      final displayTime = TimeOfDay.fromDateTime(
+                        scheduledFor,
+                      ).format(context);
+                      try {
+                        final notifier = ref.read(routinesProvider.notifier);
+                        if (routine == null) {
+                          final timestamp =
+                              DateTime.now().microsecondsSinceEpoch;
+                          await notifier.addRoutine(
+                            RoutineItem(
+                              id: 'routine-$timestamp',
+                              title: title,
+                              subtitle: descriptionController.text.trim(),
+                              time: displayTime,
+                              isCompleted: false,
+                            ),
+                            patientId: ref.read(patientProvider).id,
+                            scheduledFor: scheduledFor,
+                          );
+                        } else {
+                          await notifier.updateRoutine(
+                            routineId: routine.id,
+                            title: title,
+                            description: descriptionController.text,
+                            displayTime: displayTime,
+                            scheduledFor: scheduledFor,
+                          );
+                        }
+                        if (!dialogContext.mounted) return;
+                        Navigator.of(dialogContext).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              routine == null
+                                  ? '$title added.'
+                                  : '$title updated.',
+                            ),
+                          ),
+                        );
+                      } catch (_) {
+                        if (!dialogContext.mounted) return;
+                        setDialogState(() => isSaving = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              routine == null
+                                  ? 'Unable to add routine. Please try again.'
+                                  : 'Unable to update routine. Please try again.',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+              child: isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(routine == null ? 'Add routine' : 'Save changes'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    titleController.dispose();
+    descriptionController.dispose();
+    timeController.dispose();
+  }
+
+  Future<void> _confirmRoutineDeactivation(
+    BuildContext context,
+    WidgetRef ref,
+    RoutineItem routine,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Stop this routine?'),
+        content: Text(
+          '${routine.title} will be removed from the active schedule. Past completion records will be kept.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.alertRed),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Stop routine'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ref.read(routinesProvider.notifier).deactivateRoutine(routine.id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${routine.title} is no longer active.')),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to stop routine. Please try again.'),
+        ),
+      );
+    }
   }
 
   Future<void> _showEditMedicationDialog(

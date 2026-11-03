@@ -424,6 +424,60 @@ class SupabaseCareRepository implements CareRepository {
   );
 
   @override
+  Future<RoutineItem> createRoutineSchedule({
+    required String patientId,
+    required String title,
+    required String description,
+    required DateTime scheduledFor,
+    required String timezone,
+    required String idempotencyKey,
+  }) async {
+    final routineId = await _client.rpc<String>(
+      'create_routine_schedule',
+      params: {
+        'target_patient_id': patientId,
+        'routine_title': title.trim(),
+        'routine_description': description.trim(),
+        'target_local_time': _databaseTime(scheduledFor),
+        'target_timezone': timezone,
+        'request_idempotency_key': idempotencyKey,
+      },
+    );
+    return RoutineItem(
+      id: routineId,
+      title: title.trim(),
+      subtitle: description.trim(),
+      time: _displayTime(_databaseTime(scheduledFor)),
+      isCompleted: false,
+    );
+  }
+
+  @override
+  Future<void> updateRoutineSchedule({
+    required String routineId,
+    required String title,
+    required String description,
+    required DateTime scheduledFor,
+    required String timezone,
+  }) => _client.rpc<void>(
+    'update_routine_schedule',
+    params: {
+      'target_routine_id': routineId,
+      'routine_title': title.trim(),
+      'routine_description': description.trim(),
+      'target_local_time': _databaseTime(scheduledFor),
+      'target_timezone': timezone,
+    },
+  );
+
+  @override
+  Future<void> deactivateRoutineSchedule({required String routineId}) =>
+      _client.rpc<void>(
+        'deactivate_routine_schedule',
+        params: {'target_routine_id': routineId},
+      );
+
+  @override
   Future<void> setRoutineCompleted({
     required String routineId,
     required bool completed,
@@ -628,6 +682,10 @@ class SupabaseCareRepository implements CareRepository {
       '${value.year.toString().padLeft(4, '0')}-'
       '${value.month.toString().padLeft(2, '0')}-'
       '${value.day.toString().padLeft(2, '0')}';
+
+  static String _databaseTime(DateTime value) =>
+      '${value.hour.toString().padLeft(2, '0')}:'
+      '${value.minute.toString().padLeft(2, '0')}:00';
 
   static (double, double) _coordinates(Object? value) {
     if (value is Map<String, dynamic>) {

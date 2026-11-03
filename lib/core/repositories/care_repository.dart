@@ -62,6 +62,25 @@ abstract interface class CareRepository {
     required String instructions,
   });
 
+  Future<RoutineItem> createRoutineSchedule({
+    required String patientId,
+    required String title,
+    required String description,
+    required DateTime scheduledFor,
+    required String timezone,
+    required String idempotencyKey,
+  });
+
+  Future<void> updateRoutineSchedule({
+    required String routineId,
+    required String title,
+    required String description,
+    required DateTime scheduledFor,
+    required String timezone,
+  });
+
+  Future<void> deactivateRoutineSchedule({required String routineId});
+
   Future<void> setRoutineCompleted({
     required String routineId,
     required bool completed,

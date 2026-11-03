@@ -357,6 +357,51 @@ class RoutineNotifier extends StateNotifier<List<RoutineItem>> {
 
   void replace(List<RoutineItem> routines) => state = routines;
 
+  Future<void> addRoutine(
+    RoutineItem routine, {
+    required String patientId,
+    required DateTime scheduledFor,
+  }) async {
+    final persisted = await _repository?.createRoutineSchedule(
+      patientId: patientId,
+      title: routine.title,
+      description: routine.subtitle,
+      scheduledFor: scheduledFor,
+      timezone: AppConfig.careTimezone,
+      idempotencyKey: 'routine:${routine.id}',
+    );
+    state = [...state, persisted ?? routine];
+  }
+
+  Future<void> updateRoutine({
+    required String routineId,
+    required String title,
+    required String description,
+    required String displayTime,
+    required DateTime scheduledFor,
+  }) async {
+    await _repository?.updateRoutineSchedule(
+      routineId: routineId,
+      title: title,
+      description: description,
+      scheduledFor: scheduledFor,
+      timezone: AppConfig.careTimezone,
+    );
+    state = state.map((routine) {
+      if (routine.id != routineId) return routine;
+      return routine.copyWith(
+        title: title.trim(),
+        subtitle: description.trim(),
+        time: displayTime,
+      );
+    }).toList();
+  }
+
+  Future<void> deactivateRoutine(String routineId) async {
+    await _repository?.deactivateRoutineSchedule(routineId: routineId);
+    state = state.where((routine) => routine.id != routineId).toList();
+  }
+
   Future<void> toggleRoutine(String id) async {
     final routine = state.where((item) => item.id == id).firstOrNull;
     if (routine == null) return;
