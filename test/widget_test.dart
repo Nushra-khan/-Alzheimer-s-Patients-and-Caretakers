@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:alzheimers_care/main.dart';
 import 'package:alzheimers_care/features/auth/reset_password_screen.dart';
 import 'package:alzheimers_care/features/patient/settings/patient_settings_screen.dart';
+import 'package:alzheimers_care/features/caregiver/schedules/schedules_screen.dart';
 
 void main() {
   testWidgets('App opens directly to Login screen smoke test', (
@@ -106,5 +107,30 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(find.text('Remove caregiver?'), findsNothing);
+  });
+
+  testWidgets('caregiver must confirm before stopping medication', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: SchedulesScreen())),
+    );
+
+    final options = find.byTooltip('Medication options for Donepezil');
+    await tester.ensureVisible(options);
+    await tester.tap(options);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Stop medication').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Stop this medication?'), findsOneWidget);
+    expect(
+      find.textContaining('Past dose records will be kept.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Stop this medication?'), findsNothing);
   });
 }

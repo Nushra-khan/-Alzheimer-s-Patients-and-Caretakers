@@ -273,6 +273,17 @@ class DoseInstanceNotifier extends StateNotifier<List<DoseInstance>> {
     );
     state = [...state, persisted ?? dose];
   }
+
+  Future<void> deactivateMedication({
+    required String patientId,
+    required String medicationId,
+  }) async {
+    await _repository?.deactivateMedication(
+      patientId: patientId,
+      medicationId: medicationId,
+    );
+    state = state.where((dose) => dose.medicationId != medicationId).toList();
+  }
 }
 
 final doseInstancesProvider =

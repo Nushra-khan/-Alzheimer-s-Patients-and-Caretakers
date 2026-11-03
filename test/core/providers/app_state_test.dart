@@ -73,6 +73,21 @@ void main() {
     expect(notifier.state.last.id, dose.id);
   });
 
+  test('deactivating a medication removes all of its active doses', () async {
+    final notifier = DoseInstanceNotifier();
+    final medicationId = notifier.state.first.medicationId;
+
+    await notifier.deactivateMedication(
+      patientId: 'patient-1',
+      medicationId: medicationId,
+    );
+
+    expect(
+      notifier.state.any((dose) => dose.medicationId == medicationId),
+      isFalse,
+    );
+  });
+
   test('revoking caregiver access removes the caregiver from state', () async {
     final notifier = CaregiversNotifier();
     final caregiverId = notifier.state.first.id;

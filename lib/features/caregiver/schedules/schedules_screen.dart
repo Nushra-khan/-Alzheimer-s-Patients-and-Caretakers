@@ -4,6 +4,8 @@ import '../../../app/theme.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/app_state.dart';
 
+enum _MedicationAction { deactivate }
+
 class SchedulesScreen extends ConsumerWidget {
   const SchedulesScreen({super.key});
 
@@ -102,8 +104,8 @@ class SchedulesScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -126,6 +128,29 @@ class SchedulesScreen extends ConsumerWidget {
                                   : Colors.orange.shade900,
                             ),
                           ),
+                        ),
+                        PopupMenuButton<_MedicationAction>(
+                          tooltip: 'Medication options for ${med.medicineName}',
+                          onSelected: (action) {
+                            if (action == _MedicationAction.deactivate) {
+                              _confirmMedicationDeactivation(context, ref, med);
+                            }
+                          },
+                          itemBuilder: (context) => const [
+                            PopupMenuItem(
+                              value: _MedicationAction.deactivate,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.remove_circle_outline_rounded,
+                                    color: AppTheme.alertRed,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text('Stop medication'),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -184,6 +209,56 @@ class SchedulesScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmMedicationDeactivation(
+    BuildContext context,
+    WidgetRef ref,
+    DoseInstance medication,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Stop this medication?'),
+        content: Text(
+          '${medication.medicineName} will be removed from the active schedule. Past dose records will be kept.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.alertRed),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Stop medication'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ref
+          .read(doseInstancesProvider.notifier)
+          .deactivateMedication(
+            patientId: ref.read(patientProvider).id,
+            medicationId: medication.medicationId,
+          );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${medication.medicineName} is no longer active.'),
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to stop medication. Please try again.'),
+        ),
+      );
+    }
   }
 
   void _showAddMedicationDialog(BuildContext context, WidgetRef ref) {

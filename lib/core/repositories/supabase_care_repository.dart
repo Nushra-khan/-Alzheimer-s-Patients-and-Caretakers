@@ -100,7 +100,8 @@ class SupabaseCareRepository implements CareRepository {
     final scheduleRows = await _client
         .from('medication_schedules')
         .select('id, medication_id')
-        .inFilter('id', scheduleIds);
+        .inFilter('id', scheduleIds)
+        .eq('active', true);
     final medicationIdBySchedule = <String, String>{
       for (final row in scheduleRows)
         row['id'] as String: row['medication_id'] as String,
@@ -111,26 +112,35 @@ class SupabaseCareRepository implements CareRepository {
         : await _client
               .from('medications')
               .select('id, name, dosage, instructions')
-              .inFilter('id', medicationIds);
+              .inFilter('id', medicationIds)
+              .eq('active', true);
     final medicationById = <String, Map<String, dynamic>>{
       for (final row in medicationRows) row['id'] as String: row,
     };
 
-    return doseRows.map((row) {
-      final scheduleId = row['schedule_id'] as String;
-      final medicationId = medicationIdBySchedule[scheduleId] ?? '';
-      final medication = medicationById[medicationId];
-      final scheduledFor = DateTime.parse(row['scheduled_for'] as String);
-      return DoseInstance(
-        id: row['id'] as String,
-        medicationId: medicationId,
-        medicineName: medication?['name'] as String? ?? 'Medication',
-        dosage: medication?['dosage'] as String? ?? '',
-        instructions: medication?['instructions'] as String? ?? '',
-        scheduledFor: scheduledFor.toLocal(),
-        status: _doseStatus(row['status'] as String? ?? 'scheduled'),
-      );
-    }).toList();
+    return doseRows
+        .where((row) {
+          final medicationId =
+              medicationIdBySchedule[row['schedule_id'] as String];
+          return medicationId != null &&
+              medicationById.containsKey(medicationId);
+        })
+        .map((row) {
+          final scheduleId = row['schedule_id'] as String;
+          final medicationId = medicationIdBySchedule[scheduleId]!;
+          final medication = medicationById[medicationId]!;
+          final scheduledFor = DateTime.parse(row['scheduled_for'] as String);
+          return DoseInstance(
+            id: row['id'] as String,
+            medicationId: medicationId,
+            medicineName: medication['name'] as String? ?? 'Medication',
+            dosage: medication['dosage'] as String? ?? '',
+            instructions: medication['instructions'] as String? ?? '',
+            scheduledFor: scheduledFor.toLocal(),
+            status: _doseStatus(row['status'] as String? ?? 'scheduled'),
+          );
+        })
+        .toList();
   }
 
   @override
@@ -382,6 +392,18 @@ class SupabaseCareRepository implements CareRepository {
       status: DoseStatus.scheduled,
     );
   }
+
+  @override
+  Future<void> deactivateMedication({
+    required String patientId,
+    required String medicationId,
+  }) => _client.rpc<void>(
+    'deactivate_medication',
+    params: {
+      'target_patient_id': patientId,
+      'target_medication_id': medicationId,
+    },
+  );
 
   @override
   Future<void> setRoutineCompleted({

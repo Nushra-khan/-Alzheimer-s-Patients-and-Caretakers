@@ -49,6 +49,11 @@ abstract interface class CareRepository {
     required String idempotencyKey,
   });
 
+  Future<void> deactivateMedication({
+    required String patientId,
+    required String medicationId,
+  });
+
   Future<void> setRoutineCompleted({
     required String routineId,
     required bool completed,
