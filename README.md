@@ -182,7 +182,9 @@ To enable Google authentication:
    enter the Google client ID and secret.
 3. Add `io.supabase.memora://login-callback` to the allowed redirect URLs under
    **Authentication > URL Configuration**.
-4. Restart the app and test login on a physical device.
+4. Add `io.supabase.memora://reset-password` to the same allowed redirect list
+   so password-recovery emails can return to the app.
+5. Restart the app and test login and password recovery on a physical device.
 
 The Android intent filter and iOS URL scheme are already configured in the
 repository.

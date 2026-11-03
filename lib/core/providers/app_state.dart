@@ -15,12 +15,21 @@ final careRepositoryProvider = Provider<CareRepository?>((ref) {
   return SupabaseCareRepository(Supabase.instance.client);
 });
 
+final passwordRecoveryProvider = StateProvider<bool>((ref) => false);
+
 class SessionNotifier extends StateNotifier<AppSession> {
-  SessionNotifier() : super(const AppSession.signedOut()) {
+  SessionNotifier({void Function(bool)? onPasswordRecovery})
+    : _onPasswordRecovery = onPasswordRecovery ?? _ignorePasswordRecovery,
+      super(const AppSession.signedOut()) {
     if (AppConfig.hasSupabaseConfiguration) {
       _authService = AuthService(Supabase.instance.client);
       _authSubscription = _authService!.authStateChanges.listen((authState) {
+        if (authState.event == AuthChangeEvent.passwordRecovery) {
+          _onPasswordRecovery(true);
+          return;
+        }
         if (authState.session == null) {
+          _onPasswordRecovery(false);
           state = const AppSession.signedOut();
         } else {
           unawaited(refreshAuthenticatedSession());
@@ -35,6 +44,9 @@ class SessionNotifier extends StateNotifier<AppSession> {
 
   AuthService? _authService;
   StreamSubscription<AuthState>? _authSubscription;
+  final void Function(bool) _onPasswordRecovery;
+
+  static void _ignorePasswordRecovery(bool _) {}
 
   AuthService get _configuredAuth =>
       _authService ??
@@ -71,6 +83,24 @@ class SessionNotifier extends StateNotifier<AppSession> {
 
   Future<void> signInWithGoogle() => _configuredAuth.signInWithGoogle();
 
+  Future<void> sendPasswordReset(String email) =>
+      _configuredAuth.sendPasswordReset(email);
+
+  Future<void> updatePassword(String password) async {
+    await _configuredAuth.updatePassword(password);
+    await _configuredAuth.signOut();
+    _onPasswordRecovery(false);
+    state = const AppSession.signedOut();
+  }
+
+  Future<void> cancelPasswordRecovery() async {
+    if (_authService?.currentSession != null) {
+      await _authService!.signOut();
+    }
+    _onPasswordRecovery(false);
+    state = const AppSession.signedOut();
+  }
+
   Future<void> refreshAuthenticatedSession() async {
     try {
       final role = await _configuredAuth.resolveCurrentUserRole();
@@ -99,7 +129,10 @@ class SessionNotifier extends StateNotifier<AppSession> {
 }
 
 final sessionProvider = StateNotifierProvider<SessionNotifier, AppSession>(
-  (ref) => SessionNotifier(),
+  (ref) => SessionNotifier(
+    onPasswordRecovery: (isActive) =>
+        ref.read(passwordRecoveryProvider.notifier).state = isActive,
+  ),
 );
 
 // Patient Profile State Provider

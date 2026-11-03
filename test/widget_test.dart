@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:alzheimers_care/main.dart';
+import 'package:alzheimers_care/features/auth/reset_password_screen.dart';
 
 void main() {
   testWidgets('App opens directly to Login screen smoke test', (
@@ -38,6 +39,35 @@ void main() {
 
     expect(find.text('Enter your email address'), findsOneWidget);
     expect(find.text('Enter your password'), findsOneWidget);
+  });
+
+  testWidgets('Forgot-password screen validates email', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: MemoraApp()));
+
+    await tester.ensureVisible(find.text('Forgot password?'));
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Forgot your password?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Send reset link'));
+    await tester.pump();
+
+    expect(find.text('Enter your email address'), findsOneWidget);
+  });
+
+  testWidgets('Reset-password screen validates both passwords', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: ResetPasswordScreen())),
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Update password'));
+    await tester.pump();
+
+    expect(find.text('Use at least 8 characters'), findsOneWidget);
   });
 
   testWidgets('Sign-up validates required account details', (

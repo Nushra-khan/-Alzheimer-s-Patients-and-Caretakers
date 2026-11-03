@@ -5,6 +5,10 @@ import '../../core/models/models.dart';
 class AuthService {
   AuthService(this._client);
 
+  static const googleCallbackUrl = 'io.supabase.memora://login-callback';
+  static const passwordRecoveryCallbackUrl =
+      'io.supabase.memora://reset-password';
+
   final SupabaseClient _client;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
@@ -40,12 +44,27 @@ class AuthService {
   Future<void> signInWithGoogle() async {
     final opened = await _client.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: 'io.supabase.memora://login-callback',
+      redirectTo: googleCallbackUrl,
       authScreenLaunchMode: LaunchMode.externalApplication,
     );
     if (!opened) {
       throw const AuthException('Unable to open Google sign-in.');
     }
+  }
+
+  Future<void> sendPasswordReset(String email) =>
+      _client.auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo: passwordRecoveryCallbackUrl,
+      );
+
+  Future<void> updatePassword(String password) async {
+    if (_client.auth.currentSession == null) {
+      throw const AuthException(
+        'This password reset link is invalid or has expired. Request a new one.',
+      );
+    }
+    await _client.auth.updateUser(UserAttributes(password: password));
   }
 
   Future<UserRole> resolveCurrentUserRole() async {

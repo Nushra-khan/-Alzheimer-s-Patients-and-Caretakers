@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/providers/app_state.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/signup_screen.dart';
+import '../features/auth/forgot_password_screen.dart';
+import '../features/auth/reset_password_screen.dart';
 import '../features/patient/patient_shell_screen.dart';
 import '../features/patient/today/today_screen.dart';
 import '../features/patient/sos/sos_screen.dart';
@@ -18,12 +20,17 @@ import '../features/caregiver/profile/caregiver_profile_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final session = ref.watch(sessionProvider);
+  final isPasswordRecovery = ref.watch(passwordRecoveryProvider);
 
   return GoRouter(
     initialLocation: '/login',
     redirect: (context, state) {
       final path = state.uri.path;
-      final isPublic = path == '/login' || path == '/signup';
+      const resetPath = '/reset-password';
+      final isPublic =
+          path == '/login' || path == '/signup' || path == '/forgot-password';
+      if (isPasswordRecovery && path != resetPath) return resetPath;
+      if (path == resetPath && !isPasswordRecovery) return '/login';
       if (isPublic && session.isAuthenticated) {
         return session.canAccessPatient
             ? '/patient/today'
@@ -43,6 +50,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/signup',
         builder: (context, state) => const SignupScreen(),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) => const ResetPasswordScreen(),
       ),
       // Patient Navigation Shell
       ShellRoute(
