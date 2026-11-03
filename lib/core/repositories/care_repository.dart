@@ -34,6 +34,11 @@ abstract interface class CareRepository {
 
   Future<String> acceptCareInvitation(String token);
 
+  Future<void> revokeCaregiverAccess({
+    required String patientId,
+    required String caregiverId,
+  });
+
   Future<DoseInstance> createMedicationSchedule({
     required String patientId,
     required String medicineName,

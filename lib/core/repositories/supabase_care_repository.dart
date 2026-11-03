@@ -339,6 +339,18 @@ class SupabaseCareRepository implements CareRepository {
   }
 
   @override
+  Future<void> revokeCaregiverAccess({
+    required String patientId,
+    required String caregiverId,
+  }) => _client.rpc<void>(
+    'revoke_caregiver_access',
+    params: {
+      'target_patient_id': patientId,
+      'target_caregiver_id': caregiverId,
+    },
+  );
+
+  @override
   Future<DoseInstance> createMedicationSchedule({
     required String patientId,
     required String medicineName,

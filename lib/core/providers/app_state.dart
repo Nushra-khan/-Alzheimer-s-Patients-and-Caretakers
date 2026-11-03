@@ -630,7 +630,7 @@ final safeZoneProvider = StateNotifierProvider<SafeZoneNotifier, SafeZoneModel>(
 
 // Caregivers & Emergency Contacts List
 class CaregiversNotifier extends StateNotifier<List<CaregiverModel>> {
-  CaregiversNotifier({bool useDemoData = true})
+  CaregiversNotifier({bool useDemoData = true, this._repository})
     : super(
         useDemoData
             ? [
@@ -654,13 +654,27 @@ class CaregiversNotifier extends StateNotifier<List<CaregiverModel>> {
             : const [],
       );
 
+  final CareRepository? _repository;
+
   void replace(List<CaregiverModel> caregivers) => state = caregivers;
+
+  Future<void> revokeAccess({
+    required String patientId,
+    required String caregiverId,
+  }) async {
+    await _repository?.revokeCaregiverAccess(
+      patientId: patientId,
+      caregiverId: caregiverId,
+    );
+    state = state.where((caregiver) => caregiver.id != caregiverId).toList();
+  }
 }
 
 final caregiversProvider =
     StateNotifierProvider<CaregiversNotifier, List<CaregiverModel>>((ref) {
       return CaregiversNotifier(
         useDemoData: ref.watch(careRepositoryProvider) == null,
+        repository: ref.watch(careRepositoryProvider),
       );
     });
 

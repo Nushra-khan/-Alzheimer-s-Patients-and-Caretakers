@@ -72,4 +72,19 @@ void main() {
 
     expect(notifier.state.last.id, dose.id);
   });
+
+  test('revoking caregiver access removes the caregiver from state', () async {
+    final notifier = CaregiversNotifier();
+    final caregiverId = notifier.state.first.id;
+
+    await notifier.revokeAccess(
+      patientId: 'patient-1',
+      caregiverId: caregiverId,
+    );
+
+    expect(
+      notifier.state.any((caregiver) => caregiver.id == caregiverId),
+      isFalse,
+    );
+  });
 }

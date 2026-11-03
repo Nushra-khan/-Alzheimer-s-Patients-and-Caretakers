@@ -174,10 +174,13 @@ class PatientSettingsScreen extends ConsumerWidget {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(cg.relationship),
-                      trailing: cg.isPrimary
-                          ? Container(
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (cg.isPrimary)
+                            Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
+                                horizontal: 8,
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
@@ -187,13 +190,26 @@ class PatientSettingsScreen extends ConsumerWidget {
                               child: const Text(
                                 'PRIMARY',
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                   color: AppTheme.primaryColor,
                                 ),
                               ),
-                            )
-                          : null,
+                            ),
+                          IconButton(
+                            tooltip: 'Remove ${cg.name}',
+                            color: AppTheme.alertRed,
+                            onPressed: () => _confirmCaregiverRemoval(
+                              context,
+                              ref,
+                              patientId: patient.id,
+                              caregiverId: cg.id,
+                              caregiverName: cg.name,
+                            ),
+                            icon: const Icon(Icons.person_remove_outlined),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const Divider(height: 1),
@@ -291,5 +307,52 @@ class PatientSettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _confirmCaregiverRemoval(
+    BuildContext context,
+    WidgetRef ref, {
+    required String patientId,
+    required String caregiverId,
+    required String caregiverName,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove caregiver?'),
+        content: Text(
+          '$caregiverName will immediately lose access to your care information, alerts, and shared location.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.alertRed),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove access'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ref
+          .read(caregiversProvider.notifier)
+          .revokeAccess(patientId: patientId, caregiverId: caregiverId);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$caregiverName no longer has access.')),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to remove caregiver. Please try again.'),
+        ),
+      );
+    }
   }
 }

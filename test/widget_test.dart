@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:alzheimers_care/main.dart';
 import 'package:alzheimers_care/features/auth/reset_password_screen.dart';
+import 'package:alzheimers_care/features/patient/settings/patient_settings_screen.dart';
 
 void main() {
   testWidgets('App opens directly to Login screen smoke test', (
@@ -85,5 +86,25 @@ void main() {
     expect(find.text('Enter your full name'), findsOneWidget);
     expect(find.text('Enter your email address'), findsOneWidget);
     expect(find.text('Use at least 8 characters'), findsOneWidget);
+  });
+
+  testWidgets('patient must confirm before removing a caregiver', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: PatientSettingsScreen())),
+    );
+
+    final removeButton = find.byTooltip('Remove Sunita Sharma');
+    await tester.ensureVisible(removeButton);
+    await tester.tap(removeButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove caregiver?'), findsOneWidget);
+    expect(find.text('Remove access'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove caregiver?'), findsNothing);
   });
 }
