@@ -88,6 +88,33 @@ void main() {
     );
   });
 
+  test('editing medication updates every visible dose detail', () async {
+    final notifier = DoseInstanceNotifier();
+    final medicationId = notifier.state.first.medicationId;
+
+    await notifier.updateMedicationDetails(
+      patientId: 'patient-1',
+      medicationId: medicationId,
+      medicineName: 'Updated medicine',
+      dosage: '2 tablets',
+      instructions: 'After dinner',
+    );
+
+    final updated = notifier.state.where(
+      (dose) => dose.medicationId == medicationId,
+    );
+    expect(updated, isNotEmpty);
+    expect(
+      updated.every((dose) => dose.medicineName == 'Updated medicine'),
+      isTrue,
+    );
+    expect(updated.every((dose) => dose.dosage == '2 tablets'), isTrue);
+    expect(
+      updated.every((dose) => dose.instructions == 'After dinner'),
+      isTrue,
+    );
+  });
+
   test('revoking caregiver access removes the caregiver from state', () async {
     final notifier = CaregiversNotifier();
     final caregiverId = notifier.state.first.id;

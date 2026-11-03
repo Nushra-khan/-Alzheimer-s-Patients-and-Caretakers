@@ -284,6 +284,30 @@ class DoseInstanceNotifier extends StateNotifier<List<DoseInstance>> {
     );
     state = state.where((dose) => dose.medicationId != medicationId).toList();
   }
+
+  Future<void> updateMedicationDetails({
+    required String patientId,
+    required String medicationId,
+    required String medicineName,
+    required String dosage,
+    required String instructions,
+  }) async {
+    await _repository?.updateMedicationDetails(
+      patientId: patientId,
+      medicationId: medicationId,
+      medicineName: medicineName,
+      dosage: dosage,
+      instructions: instructions,
+    );
+    state = state.map((dose) {
+      if (dose.medicationId != medicationId) return dose;
+      return dose.copyWith(
+        medicineName: medicineName.trim(),
+        dosage: dosage.trim(),
+        instructions: instructions.trim(),
+      );
+    }).toList();
+  }
 }
 
 final doseInstancesProvider =

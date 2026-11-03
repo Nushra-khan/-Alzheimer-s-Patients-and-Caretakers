@@ -54,6 +54,14 @@ abstract interface class CareRepository {
     required String medicationId,
   });
 
+  Future<void> updateMedicationDetails({
+    required String patientId,
+    required String medicationId,
+    required String medicineName,
+    required String dosage,
+    required String instructions,
+  });
+
   Future<void> setRoutineCompleted({
     required String routineId,
     required bool completed,

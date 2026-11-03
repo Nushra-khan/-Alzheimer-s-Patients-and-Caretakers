@@ -4,7 +4,7 @@ import '../../../app/theme.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/app_state.dart';
 
-enum _MedicationAction { deactivate }
+enum _MedicationAction { edit, deactivate }
 
 class SchedulesScreen extends ConsumerWidget {
   const SchedulesScreen({super.key});
@@ -132,11 +132,33 @@ class SchedulesScreen extends ConsumerWidget {
                         PopupMenuButton<_MedicationAction>(
                           tooltip: 'Medication options for ${med.medicineName}',
                           onSelected: (action) {
-                            if (action == _MedicationAction.deactivate) {
-                              _confirmMedicationDeactivation(context, ref, med);
+                            switch (action) {
+                              case _MedicationAction.edit:
+                                _showEditMedicationDialog(context, ref, med);
+                                break;
+                              case _MedicationAction.deactivate:
+                                _confirmMedicationDeactivation(
+                                  context,
+                                  ref,
+                                  med,
+                                );
+                                break;
                             }
                           },
                           itemBuilder: (context) => const [
+                            PopupMenuItem(
+                              value: _MedicationAction.edit,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.edit_outlined,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text('Edit details'),
+                                ],
+                              ),
+                            ),
                             PopupMenuItem(
                               value: _MedicationAction.deactivate,
                               child: Row(
@@ -209,6 +231,122 @@ class SchedulesScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showEditMedicationDialog(
+    BuildContext context,
+    WidgetRef ref,
+    DoseInstance medication,
+  ) async {
+    final nameController = TextEditingController(text: medication.medicineName);
+    final dosageController = TextEditingController(text: medication.dosage);
+    final instructionsController = TextEditingController(
+      text: medication.instructions,
+    );
+    var isSaving = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text('Edit medication'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  enabled: !isSaving,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Medicine'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: dosageController,
+                  enabled: !isSaving,
+                  decoration: const InputDecoration(labelText: 'Dosage'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: instructionsController,
+                  enabled: !isSaving,
+                  maxLines: 2,
+                  decoration: const InputDecoration(labelText: 'Instructions'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final name = nameController.text.trim();
+                      final dosage = dosageController.text.trim();
+                      if (name.isEmpty || dosage.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Medicine and dosage are required.'),
+                          ),
+                        );
+                        return;
+                      }
+                      setDialogState(() => isSaving = true);
+                      try {
+                        await ref
+                            .read(doseInstancesProvider.notifier)
+                            .updateMedicationDetails(
+                              patientId: ref.read(patientProvider).id,
+                              medicationId: medication.medicationId,
+                              medicineName: name,
+                              dosage: dosage,
+                              instructions: instructionsController.text,
+                            );
+                        if (!dialogContext.mounted) return;
+                        Navigator.of(dialogContext).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$name updated.')),
+                        );
+                      } catch (_) {
+                        if (!dialogContext.mounted) return;
+                        setDialogState(() => isSaving = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Unable to update medication. Please try again.',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+              child: isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Save changes'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    nameController.dispose();
+    dosageController.dispose();
+    instructionsController.dispose();
   }
 
   Future<void> _confirmMedicationDeactivation(

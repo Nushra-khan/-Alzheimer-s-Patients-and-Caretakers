@@ -133,4 +133,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Stop this medication?'), findsNothing);
   });
+
+  testWidgets('caregiver can open prefilled medication editor', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: SchedulesScreen())),
+    );
+
+    final options = find.byTooltip('Medication options for Donepezil');
+    await tester.ensureVisible(options);
+    await tester.tap(options);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit details'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit medication'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Donepezil'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '10 mg • 1 Tablet'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit medication'), findsNothing);
+  });
 }

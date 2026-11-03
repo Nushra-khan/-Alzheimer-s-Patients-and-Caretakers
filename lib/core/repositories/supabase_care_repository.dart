@@ -406,6 +406,24 @@ class SupabaseCareRepository implements CareRepository {
   );
 
   @override
+  Future<void> updateMedicationDetails({
+    required String patientId,
+    required String medicationId,
+    required String medicineName,
+    required String dosage,
+    required String instructions,
+  }) => _client.rpc<void>(
+    'update_medication_details',
+    params: {
+      'target_patient_id': patientId,
+      'target_medication_id': medicationId,
+      'medicine_name': medicineName.trim(),
+      'medicine_dosage': dosage.trim(),
+      'medicine_instructions': instructions.trim(),
+    },
+  );
+
+  @override
   Future<void> setRoutineCompleted({
     required String routineId,
     required bool completed,
