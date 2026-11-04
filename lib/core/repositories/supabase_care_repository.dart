@@ -643,16 +643,18 @@ class SupabaseCareRepository implements CareRepository {
   }
 
   @override
-  Future<void> reportDoseTaken({
+  Future<void> updateDoseStatus({
     required String doseInstanceId,
+    required DoseStatus status,
     required String idempotencyKey,
-    required DateTime reportedAt,
+    required DateTime occurredAt,
   }) => _client.rpc<void>(
-    'report_dose_taken',
+    'update_dose_status',
     params: {
       'target_dose_instance_id': doseInstanceId,
+      'target_status': _databaseDoseStatus(status),
       'request_idempotency_key': idempotencyKey,
-      'reported_at': reportedAt.toUtc().toIso8601String(),
+      'target_occurred_at': occurredAt.toUtc().toIso8601String(),
     },
   );
 
@@ -704,6 +706,13 @@ class SupabaseCareRepository implements CareRepository {
     'skipped' => DoseStatus.skipped,
     'overdue' => DoseStatus.overdue,
     _ => DoseStatus.scheduled,
+  };
+
+  static String _databaseDoseStatus(DoseStatus status) => switch (status) {
+    DoseStatus.reportedTaken => 'reported_taken',
+    DoseStatus.skipped => 'skipped',
+    DoseStatus.overdue => 'overdue',
+    DoseStatus.scheduled => 'scheduled',
   };
 
   static AlertType _alertType(String value) => switch (value) {

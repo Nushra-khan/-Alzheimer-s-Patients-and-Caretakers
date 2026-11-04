@@ -19,17 +19,25 @@ void main() {
     expect(notifier.state.role, isNull);
   });
 
-  test('reporting a dose is one-way in patient state', () async {
-    final notifier = DoseInstanceNotifier();
-    final doseId = notifier.state.first.id;
+  test(
+    'dose status supports taken, correction, and skipped transitions',
+    () async {
+      final notifier = DoseInstanceNotifier();
+      final doseId = notifier.state.first.id;
 
-    await notifier.reportDoseTaken(doseId);
-    final firstReportedAt = notifier.state.first.reportedAt;
-    await notifier.reportDoseTaken(doseId);
+      await notifier.reportDoseTaken(doseId);
+      expect(notifier.state.first.status, DoseStatus.reportedTaken);
+      expect(notifier.state.first.reportedAt, isNotNull);
 
-    expect(notifier.state.first.status, DoseStatus.reportedTaken);
-    expect(notifier.state.first.reportedAt, firstReportedAt);
-  });
+      await notifier.correctDose(doseId);
+      expect(notifier.state.first.status, DoseStatus.scheduled);
+      expect(notifier.state.first.reportedAt, isNull);
+
+      await notifier.skipDose(doseId);
+      expect(notifier.state.first.status, DoseStatus.skipped);
+      expect(notifier.state.first.reportedAt, isNull);
+    },
+  );
 
   test('location sharing updates after a successful local action', () async {
     final notifier = PatientNotifier(useDemoData: false);

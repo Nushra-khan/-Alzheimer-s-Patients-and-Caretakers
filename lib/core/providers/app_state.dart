@@ -245,19 +245,33 @@ class DoseInstanceNotifier extends StateNotifier<List<DoseInstance>> {
   void replace(List<DoseInstance> doses) => state = doses;
 
   Future<void> reportDoseTaken(String id) async {
-    await _repository?.reportDoseTaken(
+    await _setDoseStatus(id, DoseStatus.reportedTaken);
+  }
+
+  Future<void> skipDose(String id) async {
+    await _setDoseStatus(id, DoseStatus.skipped);
+  }
+
+  Future<void> correctDose(String id) async {
+    await _setDoseStatus(id, DoseStatus.scheduled);
+  }
+
+  Future<void> _setDoseStatus(String id, DoseStatus status) async {
+    final occurredAt = DateTime.now();
+    await _repository?.updateDoseStatus(
       doseInstanceId: id,
-      idempotencyKey: 'dose:$id:reported',
-      reportedAt: DateTime.now(),
+      status: status,
+      idempotencyKey:
+          'dose:$id:${status.name}:${occurredAt.microsecondsSinceEpoch}',
+      occurredAt: occurredAt,
     );
     state = state.map((dose) {
-      if (dose.id == id && !dose.isReportedTaken) {
-        return dose.copyWith(
-          status: DoseStatus.reportedTaken,
-          reportedAt: DateTime.now(),
-        );
-      }
-      return dose;
+      if (dose.id != id) return dose;
+      return dose.copyWith(
+        status: status,
+        reportedAt: status == DoseStatus.reportedTaken ? occurredAt : null,
+        clearReportedAt: status != DoseStatus.reportedTaken,
+      );
     }).toList();
   }
 

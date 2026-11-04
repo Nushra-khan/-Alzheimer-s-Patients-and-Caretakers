@@ -19,7 +19,7 @@ class CaregiverDashboardScreen extends ConsumerWidget {
     final activeAlerts = alerts
         .where((a) => a.status == AlertStatus.active)
         .toList();
-    final pendingMeds = medications.where((m) => !m.isReportedTaken).toList();
+    final pendingMeds = medications.where((m) => m.isPending).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
@@ -452,12 +452,8 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                             dense: true,
                             contentPadding: EdgeInsets.zero,
                             leading: Icon(
-                              med.isReportedTaken
-                                  ? Icons.check_circle_rounded
-                                  : Icons.schedule_rounded,
-                              color: med.isReportedTaken
-                                  ? AppTheme.successGreen
-                                  : Colors.orange,
+                              _doseStatusIcon(med.status),
+                              color: _doseStatusColor(med.status),
                               size: 24,
                             ),
                             title: Text(
@@ -476,19 +472,15 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: med.isReportedTaken
-                                    ? AppTheme.successGreenContainer
-                                    : Colors.orange.shade100,
+                                color: _doseStatusBackground(med.status),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                med.isReportedTaken ? 'TAKEN' : 'PENDING',
+                                _doseStatusLabel(med.status),
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: med.isReportedTaken
-                                      ? AppTheme.successGreen
-                                      : Colors.orange.shade900,
+                                  color: _doseStatusColor(med.status),
                                 ),
                               ),
                             ),
@@ -514,6 +506,34 @@ class CaregiverDashboardScreen extends ConsumerWidget {
     return '${diff.inHours}h ago';
   }
 }
+
+String _doseStatusLabel(DoseStatus status) => switch (status) {
+  DoseStatus.reportedTaken => 'TAKEN',
+  DoseStatus.skipped => 'SKIPPED',
+  DoseStatus.overdue => 'OVERDUE',
+  DoseStatus.scheduled => 'PENDING',
+};
+
+Color _doseStatusColor(DoseStatus status) => switch (status) {
+  DoseStatus.reportedTaken => AppTheme.successGreen,
+  DoseStatus.skipped => Colors.blueGrey.shade700,
+  DoseStatus.overdue => AppTheme.alertRed,
+  DoseStatus.scheduled => Colors.orange.shade900,
+};
+
+Color _doseStatusBackground(DoseStatus status) => switch (status) {
+  DoseStatus.reportedTaken => AppTheme.successGreenContainer,
+  DoseStatus.skipped => Colors.blueGrey.shade100,
+  DoseStatus.overdue => Colors.red.shade100,
+  DoseStatus.scheduled => Colors.orange.shade100,
+};
+
+IconData _doseStatusIcon(DoseStatus status) => switch (status) {
+  DoseStatus.reportedTaken => Icons.check_circle_rounded,
+  DoseStatus.skipped => Icons.not_interested_rounded,
+  DoseStatus.overdue => Icons.warning_amber_rounded,
+  DoseStatus.scheduled => Icons.schedule_rounded,
+};
 
 class _StatusMetricTile extends StatelessWidget {
   final IconData icon;

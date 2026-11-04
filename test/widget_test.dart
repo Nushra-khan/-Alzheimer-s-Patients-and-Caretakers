@@ -6,6 +6,7 @@ import 'package:alzheimers_care/features/auth/reset_password_screen.dart';
 import 'package:alzheimers_care/features/patient/settings/patient_settings_screen.dart';
 import 'package:alzheimers_care/features/caregiver/schedules/schedules_screen.dart';
 import 'package:alzheimers_care/features/caregiver/profile/caregiver_profile_screen.dart';
+import 'package:alzheimers_care/features/patient/today/today_screen.dart';
 
 void main() {
   testWidgets('App opens directly to Login screen smoke test', (
@@ -245,5 +246,22 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(find.text('Remove emergency contact?'), findsNothing);
+  });
+
+  testWidgets('patient must confirm before skipping a dose', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: TodayScreen())),
+    );
+
+    await tester.tap(find.text('Skip').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Skip this dose?'), findsOneWidget);
+
+    await tester.tap(find.text('Skip dose'));
+    await tester.pumpAndSettle();
+    expect(find.text('SKIPPED'), findsOneWidget);
+    expect(find.text('Correct status'), findsWidgets);
   });
 }

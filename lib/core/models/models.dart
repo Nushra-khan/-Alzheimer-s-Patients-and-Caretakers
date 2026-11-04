@@ -130,6 +130,9 @@ class DoseInstance {
   });
 
   bool get isReportedTaken => status == DoseStatus.reportedTaken;
+  bool get isSkipped => status == DoseStatus.skipped;
+  bool get isPending =>
+      status == DoseStatus.scheduled || status == DoseStatus.overdue;
 
   DoseInstance copyWith({
     String? id,
@@ -140,6 +143,7 @@ class DoseInstance {
     DateTime? scheduledFor,
     DoseStatus? status,
     DateTime? reportedAt,
+    bool clearReportedAt = false,
   }) {
     return DoseInstance(
       id: id ?? this.id,
@@ -149,7 +153,7 @@ class DoseInstance {
       instructions: instructions ?? this.instructions,
       scheduledFor: scheduledFor ?? this.scheduledFor,
       status: status ?? this.status,
-      reportedAt: reportedAt ?? this.reportedAt,
+      reportedAt: clearReportedAt ? null : reportedAt ?? this.reportedAt,
     );
   }
 }

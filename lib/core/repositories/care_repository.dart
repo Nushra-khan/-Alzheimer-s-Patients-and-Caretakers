@@ -124,10 +124,11 @@ abstract interface class CareRepository {
 
   Stream<void> watchCareChanges(String patientId);
 
-  Future<void> reportDoseTaken({
+  Future<void> updateDoseStatus({
     required String doseInstanceId,
+    required DoseStatus status,
     required String idempotencyKey,
-    required DateTime reportedAt,
+    required DateTime occurredAt,
   });
 
   Future<String> createSos({
