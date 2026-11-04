@@ -5,6 +5,7 @@ import 'package:alzheimers_care/main.dart';
 import 'package:alzheimers_care/features/auth/reset_password_screen.dart';
 import 'package:alzheimers_care/features/patient/settings/patient_settings_screen.dart';
 import 'package:alzheimers_care/features/caregiver/schedules/schedules_screen.dart';
+import 'package:alzheimers_care/features/caregiver/profile/caregiver_profile_screen.dart';
 
 void main() {
   testWidgets('App opens directly to Login screen smoke test', (
@@ -200,5 +201,49 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(find.text('Stop this routine?'), findsNothing);
+  });
+
+  testWidgets('caregiver can open the add emergency contact form', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: CaregiverProfileScreen())),
+    );
+
+    final addContact = find.widgetWithText(OutlinedButton, 'Add');
+    await tester.ensureVisible(addContact);
+    await tester.tap(addContact);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add emergency contact'), findsOneWidget);
+    expect(find.text('Full name'), findsOneWidget);
+    expect(find.text('Phone number'), findsOneWidget);
+    expect(find.text('Priority'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('caregiver must confirm before removing emergency contact', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: CaregiverProfileScreen())),
+    );
+
+    final options = find.byTooltip(
+      'Contact options for Sunita Sharma (Spouse)',
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    await tester.tap(options);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove contact'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove emergency contact?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove emergency contact?'), findsNothing);
   });
 }

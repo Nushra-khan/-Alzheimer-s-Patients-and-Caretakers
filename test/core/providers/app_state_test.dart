@@ -163,4 +163,30 @@ void main() {
       isFalse,
     );
   });
+
+  test('emergency contacts can be added, edited, and removed', () async {
+    final notifier = EmergencyContactsNotifier();
+    final contact = EmergencyContact(
+      id: 'new-contact',
+      name: 'Test Contact',
+      phone: '+91 90000 00000',
+      relationship: 'Family',
+      priority: 4,
+    );
+
+    await notifier.addContact(contact, patientId: 'patient-1');
+    expect(notifier.state.any((item) => item.id == contact.id), isTrue);
+
+    final updatedContact = contact.copyWith(
+      name: 'Updated Contact',
+      priority: 1,
+    );
+    await notifier.updateContact(updatedContact);
+    final updated = notifier.state.firstWhere((item) => item.id == contact.id);
+    expect(updated.name, 'Updated Contact');
+    expect(updated.priority, 1);
+
+    await notifier.deleteContact(contact.id);
+    expect(notifier.state.any((item) => item.id == contact.id), isFalse);
+  });
 }

@@ -780,30 +780,74 @@ final currentCaregiverProvider =
     });
 
 class EmergencyContactsNotifier extends StateNotifier<List<EmergencyContact>> {
-  EmergencyContactsNotifier({bool useDemoData = true})
+  EmergencyContactsNotifier({bool useDemoData = true, this._repository})
     : super(
         useDemoData
             ? [
                 EmergencyContact(
+                  id: 'contact-1',
                   name: 'Sunita Sharma (Spouse)',
                   phone: '+91 98765 43210',
                   relationship: 'Primary Caregiver',
+                  priority: 1,
                 ),
                 EmergencyContact(
+                  id: 'contact-2',
                   name: 'Anil Sharma (Son)',
                   phone: '+91 98123 45678',
                   relationship: 'Family Member',
+                  priority: 2,
                 ),
                 EmergencyContact(
+                  id: 'contact-3',
                   name: 'Dr. V. K. Gupta (Neurologist)',
                   phone: '+91 11 2614 9999',
                   relationship: 'Attending Physician',
+                  priority: 3,
                 ),
               ]
             : const [],
       );
 
+  final CareRepository? _repository;
+
   void replace(List<EmergencyContact> contacts) => state = contacts;
+
+  Future<void> addContact(
+    EmergencyContact contact, {
+    required String patientId,
+  }) async {
+    final persisted = await _repository?.createEmergencyContact(
+      patientId: patientId,
+      name: contact.name,
+      relationship: contact.relationship,
+      phone: contact.phone,
+      priority: contact.priority,
+      idempotencyKey: 'contact:${contact.id}',
+    );
+    state = [...state, persisted ?? contact]
+      ..sort((a, b) => a.priority.compareTo(b.priority));
+  }
+
+  Future<void> updateContact(EmergencyContact contact) async {
+    await _repository?.updateEmergencyContact(
+      contactId: contact.id,
+      name: contact.name,
+      relationship: contact.relationship,
+      phone: contact.phone,
+      priority: contact.priority,
+    );
+    state =
+        state
+            .map((existing) => existing.id == contact.id ? contact : existing)
+            .toList()
+          ..sort((a, b) => a.priority.compareTo(b.priority));
+  }
+
+  Future<void> deleteContact(String contactId) async {
+    await _repository?.deleteEmergencyContact(contactId: contactId);
+    state = state.where((contact) => contact.id != contactId).toList();
+  }
 }
 
 final emergencyContactsProvider =
@@ -812,5 +856,6 @@ final emergencyContactsProvider =
     ) {
       return EmergencyContactsNotifier(
         useDemoData: ref.watch(careRepositoryProvider) == null,
+        repository: ref.watch(careRepositoryProvider),
       );
     });

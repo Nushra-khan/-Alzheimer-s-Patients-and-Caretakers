@@ -28,6 +28,25 @@ abstract interface class CareRepository {
 
   Future<List<EmergencyContact>> loadEmergencyContacts(String patientId);
 
+  Future<EmergencyContact> createEmergencyContact({
+    required String patientId,
+    required String name,
+    required String relationship,
+    required String phone,
+    required int priority,
+    required String idempotencyKey,
+  });
+
+  Future<void> updateEmergencyContact({
+    required String contactId,
+    required String name,
+    required String relationship,
+    required String phone,
+    required int priority,
+  });
+
+  Future<void> deleteEmergencyContact({required String contactId});
+
   Future<SafeZoneModel?> loadSafeZone(String patientId);
 
   Future<({String token, DateTime expiresAt})> createCareInvitation();

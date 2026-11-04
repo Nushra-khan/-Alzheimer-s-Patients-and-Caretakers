@@ -279,19 +279,75 @@ class SupabaseCareRepository implements CareRepository {
   Future<List<EmergencyContact>> loadEmergencyContacts(String patientId) async {
     final rows = await _client
         .from('emergency_contacts')
-        .select('name, relationship, phone')
+        .select('id, name, relationship, phone, priority')
         .eq('patient_id', patientId)
         .order('priority');
     return rows
         .map(
           (row) => EmergencyContact(
+            id: row['id'] as String,
             name: row['name'] as String,
             phone: row['phone'] as String,
             relationship: row['relationship'] as String? ?? '',
+            priority: row['priority'] as int? ?? 1,
           ),
         )
         .toList();
   }
+
+  @override
+  Future<EmergencyContact> createEmergencyContact({
+    required String patientId,
+    required String name,
+    required String relationship,
+    required String phone,
+    required int priority,
+    required String idempotencyKey,
+  }) async {
+    final contactId = await _client.rpc<String>(
+      'create_emergency_contact',
+      params: {
+        'target_patient_id': patientId,
+        'contact_name': name.trim(),
+        'contact_relationship': relationship.trim(),
+        'contact_phone': phone.trim(),
+        'contact_priority': priority,
+        'request_idempotency_key': idempotencyKey,
+      },
+    );
+    return EmergencyContact(
+      id: contactId,
+      name: name.trim(),
+      phone: phone.trim(),
+      relationship: relationship.trim(),
+      priority: priority,
+    );
+  }
+
+  @override
+  Future<void> updateEmergencyContact({
+    required String contactId,
+    required String name,
+    required String relationship,
+    required String phone,
+    required int priority,
+  }) => _client.rpc<void>(
+    'update_emergency_contact',
+    params: {
+      'target_contact_id': contactId,
+      'contact_name': name.trim(),
+      'contact_relationship': relationship.trim(),
+      'contact_phone': phone.trim(),
+      'contact_priority': priority,
+    },
+  );
+
+  @override
+  Future<void> deleteEmergencyContact({required String contactId}) =>
+      _client.rpc<void>(
+        'delete_emergency_contact',
+        params: {'target_contact_id': contactId},
+      );
 
   @override
   Future<SafeZoneModel?> loadSafeZone(String patientId) async {
