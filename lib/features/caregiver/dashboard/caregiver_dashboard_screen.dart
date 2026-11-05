@@ -25,9 +25,7 @@ class CaregiverDashboardScreen extends ConsumerWidget {
       backgroundColor: AppTheme.backgroundLight,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async {
-            await Future.delayed(const Duration(milliseconds: 500));
-          },
+          onRefresh: () => _refresh(context, ref),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(
@@ -497,6 +495,17 @@ class CaregiverDashboardScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _refresh(BuildContext context, WidgetRef ref) async {
+    try {
+      await refreshCareData(ref);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to refresh care information.')),
+      );
+    }
   }
 
   String _formatTimeAgo(DateTime time) {

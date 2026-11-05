@@ -7,6 +7,8 @@ import 'package:alzheimers_care/features/patient/settings/patient_settings_scree
 import 'package:alzheimers_care/features/caregiver/schedules/schedules_screen.dart';
 import 'package:alzheimers_care/features/caregiver/profile/caregiver_profile_screen.dart';
 import 'package:alzheimers_care/features/patient/today/today_screen.dart';
+import 'package:alzheimers_care/features/caregiver/dashboard/caregiver_dashboard_screen.dart';
+import 'package:alzheimers_care/core/providers/app_state.dart';
 
 void main() {
   testWidgets('App opens directly to Login screen smoke test', (
@@ -263,5 +265,55 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('SKIPPED'), findsOneWidget);
     expect(find.text('Correct status'), findsWidgets);
+  });
+
+  testWidgets('patient pull-to-refresh reloads care data', (
+    WidgetTester tester,
+  ) async {
+    var refreshCount = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          careBootstrapProvider.overrideWith((ref) async {
+            refreshCount++;
+            return CareBootstrapStatus.ready;
+          }),
+        ],
+        child: const MaterialApp(home: TodayScreen()),
+      ),
+    );
+
+    final indicator = tester.widget<RefreshIndicator>(
+      find.byType(RefreshIndicator),
+    );
+    await indicator.onRefresh();
+    await tester.pump();
+
+    expect(refreshCount, 1);
+  });
+
+  testWidgets('caregiver pull-to-refresh reloads care data', (
+    WidgetTester tester,
+  ) async {
+    var refreshCount = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          careBootstrapProvider.overrideWith((ref) async {
+            refreshCount++;
+            return CareBootstrapStatus.ready;
+          }),
+        ],
+        child: const MaterialApp(home: CaregiverDashboardScreen()),
+      ),
+    );
+
+    final indicator = tester.widget<RefreshIndicator>(
+      find.byType(RefreshIndicator),
+    );
+    await indicator.onRefresh();
+    await tester.pump();
+
+    expect(refreshCount, 1);
   });
 }

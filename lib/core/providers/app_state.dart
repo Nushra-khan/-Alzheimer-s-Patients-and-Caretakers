@@ -648,6 +648,11 @@ final careBootstrapProvider = FutureProvider<CareBootstrapStatus>((ref) async {
   return CareBootstrapStatus.ready;
 });
 
+Future<void> refreshCareData(WidgetRef ref) async {
+  ref.invalidate(careBootstrapProvider);
+  await ref.read(careBootstrapProvider.future);
+}
+
 final careRealtimeProvider = StreamProvider<void>((ref) async* {
   final session = ref.watch(sessionProvider);
   final repository = ref.watch(careRepositoryProvider);
