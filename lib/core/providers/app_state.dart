@@ -582,9 +582,8 @@ enum CareBootstrapStatus { ready, needsPatient }
 Future<T> _withFallback<T>(Future<T> request, T fallback) async {
   try {
     return await request;
-  } catch (error, stackTrace) {
+  } catch (error) {
     debugPrint('Optional care data failed to load: $error');
-    debugPrintStack(stackTrace: stackTrace);
     return fallback;
   }
 }
@@ -607,20 +606,23 @@ final careBootstrapProvider = FutureProvider<CareBootstrapStatus>((ref) async {
     repository.loadPatient(patientId),
     _withFallback<List<DoseInstance>>(
       repository.loadTodayDoses(patientId, DateTime.now()),
-      const [],
+      ref.read(doseInstancesProvider),
     ),
-    _withFallback<List<AlertModel>>(repository.loadAlerts(patientId), const []),
+    _withFallback<List<AlertModel>>(
+      repository.loadAlerts(patientId),
+      ref.read(alertsProvider),
+    ),
     _withFallback<List<RoutineItem>>(
       repository.loadRoutines(patientId),
-      const [],
+      ref.read(routinesProvider),
     ),
     _withFallback<List<CaregiverModel>>(
       repository.loadCaregivers(patientId),
-      const [],
+      ref.read(caregiversProvider),
     ),
     _withFallback<List<EmergencyContact>>(
       repository.loadEmergencyContacts(patientId),
-      const [],
+      ref.read(emergencyContactsProvider),
     ),
     _withFallback<SafeZoneModel?>(repository.loadSafeZone(patientId), null),
   ]);

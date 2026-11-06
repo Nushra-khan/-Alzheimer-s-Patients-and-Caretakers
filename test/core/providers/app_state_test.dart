@@ -1,5 +1,6 @@
 import 'package:alzheimers_care/core/models/models.dart';
 import 'package:alzheimers_care/core/providers/app_state.dart';
+import 'package:alzheimers_care/core/repositories/care_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -85,6 +86,79 @@ void main() {
     expect(container.read(currentCaregiverProvider).id, isEmpty);
     expect(container.read(emergencyContactsProvider), isNotEmpty);
   });
+
+  test(
+    'failed optional refreshes preserve the last loaded care data',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          careRepositoryProvider.overrideWithValue(
+            _FailingOptionalCareRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(sessionProvider.notifier)
+          .establishAuthenticatedSession(UserRole.patient);
+
+      final dose = DoseInstance(
+        id: 'cached-dose',
+        medicationId: 'cached-medication',
+        medicineName: 'Cached medicine',
+        dosage: '1 tablet',
+        instructions: 'After food',
+        scheduledFor: DateTime(2026, 11, 6, 9),
+        status: DoseStatus.scheduled,
+      );
+      final routine = RoutineItem(
+        id: 'cached-routine',
+        title: 'Cached routine',
+        subtitle: 'Previously loaded',
+        time: '09:00 AM',
+        isCompleted: false,
+      );
+      final alert = AlertModel(
+        id: 'cached-alert',
+        patientId: 'patient-1',
+        patientName: 'Patient',
+        type: AlertType.sos,
+        severity: AlertSeverity.critical,
+        title: 'Cached alert',
+        description: 'Previously loaded',
+        timestamp: DateTime(2026, 11, 6),
+        status: AlertStatus.active,
+      );
+      final caregiver = CaregiverModel(
+        id: 'cached-caregiver',
+        name: 'Cached caregiver',
+        relationship: 'Family',
+        phone: '123',
+        email: 'caregiver@example.com',
+        isPrimary: true,
+      );
+      final contact = EmergencyContact(
+        id: 'cached-contact',
+        name: 'Cached contact',
+        phone: '456',
+        relationship: 'Family',
+        priority: 1,
+      );
+      container.read(doseInstancesProvider.notifier).replace([dose]);
+      container.read(routinesProvider.notifier).replace([routine]);
+      container.read(alertsProvider.notifier).replace([alert]);
+      container.read(caregiversProvider.notifier).replace([caregiver]);
+      container.read(emergencyContactsProvider.notifier).replace([contact]);
+
+      await container.read(careBootstrapProvider.future);
+
+      expect(container.read(doseInstancesProvider).single.id, dose.id);
+      expect(container.read(routinesProvider).single.id, routine.id);
+      expect(container.read(alertsProvider).single.id, alert.id);
+      expect(container.read(caregiversProvider).single.id, caregiver.id);
+      expect(container.read(emergencyContactsProvider).single.id, contact.id);
+    },
+  );
 
   test(
     'dose status supports taken, correction, and skipped transitions',
@@ -264,4 +338,51 @@ void main() {
     await notifier.deleteContact(contact.id);
     expect(notifier.state.any((item) => item.id == contact.id), isFalse);
   });
+}
+
+class _FailingOptionalCareRepository implements CareRepository {
+  @override
+  Future<String> resolveAccessiblePatientId() async => 'patient-1';
+
+  @override
+  Future<PatientModel> loadPatient(String patientId) async => PatientModel(
+    id: patientId,
+    name: 'Patient',
+    dateOfBirth: DateTime(1950),
+    photoUrl: '',
+    batteryLevel: 50,
+    isDeviceOnline: true,
+    locationSharingEnabled: false,
+    lastSyncTime: DateTime(2026, 11, 6),
+    safeZoneStatus: SafeZoneStatus.unknown,
+    lastKnownLocationName: 'Unavailable',
+  );
+
+  @override
+  Future<List<DoseInstance>> loadTodayDoses(String patientId, DateTime day) =>
+      Future.error(StateError('Temporary backend failure'));
+
+  @override
+  Future<List<AlertModel>> loadAlerts(String patientId) =>
+      Future.error(StateError('Temporary backend failure'));
+
+  @override
+  Future<List<RoutineItem>> loadRoutines(String patientId) =>
+      Future.error(StateError('Temporary backend failure'));
+
+  @override
+  Future<List<CaregiverModel>> loadCaregivers(String patientId) =>
+      Future.error(StateError('Temporary backend failure'));
+
+  @override
+  Future<List<EmergencyContact>> loadEmergencyContacts(String patientId) =>
+      Future.error(StateError('Temporary backend failure'));
+
+  @override
+  Future<SafeZoneModel?> loadSafeZone(String patientId) =>
+      Future.error(StateError('Temporary backend failure'));
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      Future<Object?>.error(StateError('Temporary backend failure'));
 }
