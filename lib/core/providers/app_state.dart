@@ -191,6 +191,7 @@ class PatientNotifier extends StateNotifier<PatientModel> {
 final patientProvider = StateNotifierProvider<PatientNotifier, PatientModel>((
   ref,
 ) {
+  ref.watch(sessionProvider);
   return PatientNotifier(
     useDemoData: ref.watch(careRepositoryProvider) == null,
     repository: ref.watch(careRepositoryProvider),
@@ -326,6 +327,7 @@ class DoseInstanceNotifier extends StateNotifier<List<DoseInstance>> {
 
 final doseInstancesProvider =
     StateNotifierProvider<DoseInstanceNotifier, List<DoseInstance>>((ref) {
+      ref.watch(sessionProvider);
       return DoseInstanceNotifier(ref.watch(careRepositoryProvider));
     });
 
@@ -435,6 +437,7 @@ class RoutineNotifier extends StateNotifier<List<RoutineItem>> {
 
 final routinesProvider =
     StateNotifierProvider<RoutineNotifier, List<RoutineItem>>((ref) {
+      ref.watch(sessionProvider);
       return RoutineNotifier(
         useDemoData: ref.watch(careRepositoryProvider) == null,
         repository: ref.watch(careRepositoryProvider),
@@ -570,6 +573,7 @@ class AlertNotifier extends StateNotifier<List<AlertModel>> {
 final alertsProvider = StateNotifierProvider<AlertNotifier, List<AlertModel>>((
   ref,
 ) {
+  ref.watch(sessionProvider);
   return AlertNotifier(ref.watch(careRepositoryProvider));
 });
 
@@ -720,6 +724,7 @@ class SafeZoneNotifier extends StateNotifier<SafeZoneModel> {
 
 final safeZoneProvider = StateNotifierProvider<SafeZoneNotifier, SafeZoneModel>(
   (ref) {
+    ref.watch(sessionProvider);
     return SafeZoneNotifier(
       useDemoData: ref.watch(careRepositoryProvider) == null,
       repository: ref.watch(careRepositoryProvider),
@@ -771,6 +776,7 @@ class CaregiversNotifier extends StateNotifier<List<CaregiverModel>> {
 
 final caregiversProvider =
     StateNotifierProvider<CaregiversNotifier, List<CaregiverModel>>((ref) {
+      ref.watch(sessionProvider);
       return CaregiversNotifier(
         useDemoData: ref.watch(careRepositoryProvider) == null,
         repository: ref.watch(careRepositoryProvider),
@@ -795,6 +801,7 @@ class CurrentCaregiverNotifier extends StateNotifier<CaregiverModel> {
 
 final currentCaregiverProvider =
     StateNotifierProvider<CurrentCaregiverNotifier, CaregiverModel>((ref) {
+      ref.watch(sessionProvider);
       return CurrentCaregiverNotifier();
     });
 
@@ -873,6 +880,7 @@ final emergencyContactsProvider =
     StateNotifierProvider<EmergencyContactsNotifier, List<EmergencyContact>>((
       ref,
     ) {
+      ref.watch(sessionProvider);
       return EmergencyContactsNotifier(
         useDemoData: ref.watch(careRepositoryProvider) == null,
         repository: ref.watch(careRepositoryProvider),

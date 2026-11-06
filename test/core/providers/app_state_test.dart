@@ -1,5 +1,6 @@
 import 'package:alzheimers_care/core/models/models.dart';
 import 'package:alzheimers_care/core/providers/app_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -17,6 +18,72 @@ void main() {
 
     notifier.signOut();
     expect(notifier.state.role, isNull);
+  });
+
+  test('care state is reset when the authenticated session changes', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final session = container.read(sessionProvider.notifier);
+    session.establishAuthenticatedSession(UserRole.caregiver);
+
+    container
+        .read(patientProvider.notifier)
+        .replace(
+          PatientModel(
+            id: 'private-patient',
+            name: 'Previous account',
+            dateOfBirth: DateTime(1950),
+            photoUrl: '',
+            batteryLevel: 50,
+            isDeviceOnline: true,
+            locationSharingEnabled: true,
+            lastSyncTime: DateTime(2026),
+            safeZoneStatus: SafeZoneStatus.inside,
+            lastKnownLocationName: 'Private location',
+          ),
+        );
+    container.read(doseInstancesProvider.notifier).replace(const []);
+    container.read(routinesProvider.notifier).replace(const []);
+    container.read(alertsProvider.notifier).replace(const []);
+    container
+        .read(safeZoneProvider.notifier)
+        .replace(
+          SafeZoneModel(
+            id: 'private-zone',
+            name: 'Previous safe zone',
+            radiusMeters: 500,
+            centerLatitude: 1,
+            centerLongitude: 1,
+            isPatientInside: false,
+            lastChecked: DateTime(2026),
+          ),
+        );
+    container.read(caregiversProvider.notifier).replace(const []);
+    container
+        .read(currentCaregiverProvider.notifier)
+        .replace(
+          CaregiverModel(
+            id: 'private-caregiver',
+            name: 'Previous caregiver',
+            relationship: 'Family',
+            phone: 'private',
+            email: 'private@example.com',
+            isPrimary: true,
+          ),
+        );
+    container.read(emergencyContactsProvider.notifier).replace(const []);
+
+    // A new auth event may keep the same role while representing another user.
+    session.establishAuthenticatedSession(UserRole.caregiver);
+
+    expect(container.read(patientProvider).id, 'p-101');
+    expect(container.read(doseInstancesProvider), isNotEmpty);
+    expect(container.read(routinesProvider), isNotEmpty);
+    expect(container.read(alertsProvider), isNotEmpty);
+    expect(container.read(safeZoneProvider).id, 'sz-1');
+    expect(container.read(caregiversProvider), isNotEmpty);
+    expect(container.read(currentCaregiverProvider).id, isEmpty);
+    expect(container.read(emergencyContactsProvider), isNotEmpty);
   });
 
   test(
