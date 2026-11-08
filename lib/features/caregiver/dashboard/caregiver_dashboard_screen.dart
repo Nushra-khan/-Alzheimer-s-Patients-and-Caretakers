@@ -249,8 +249,12 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                               child: _StatusMetricTile(
                                 icon: Icons.battery_charging_full_rounded,
                                 title: 'Battery',
-                                value: '${patient.batteryLevel}%',
-                                color: patient.batteryLevel > 20
+                                value: patient.batteryLevel == null
+                                    ? 'Unavailable'
+                                    : '${patient.batteryLevel}%',
+                                color: patient.batteryLevel == null
+                                    ? AppTheme.textSecondary
+                                    : patient.batteryLevel! > 20
                                     ? AppTheme.successGreen
                                     : AppTheme.alertRed,
                               ),
@@ -264,7 +268,9 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                               child: _StatusMetricTile(
                                 icon: Icons.sync_rounded,
                                 title: 'Last Sync',
-                                value: _formatTimeAgo(patient.lastSyncTime),
+                                value: patient.lastSyncTime == null
+                                    ? 'Never'
+                                    : _formatTimeAgo(patient.lastSyncTime!),
                                 color: AppTheme.primaryColor,
                               ),
                             ),

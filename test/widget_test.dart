@@ -361,6 +361,44 @@ void main() {
     expect(find.text('Updated 3 min ago'), findsNothing);
     expect(find.text('SAFE ZONE'), findsNothing);
   });
+
+  testWidgets('missing device telemetry is shown as unavailable', (
+    WidgetTester tester,
+  ) async {
+    final neverSyncedPatient = _neverSyncedPatient();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          patientProvider.overrideWith(
+            (ref) =>
+                PatientNotifier(useDemoData: false)
+                  ..replace(neverSyncedPatient),
+          ),
+        ],
+        child: const MaterialApp(home: PatientSettingsScreen()),
+      ),
+    );
+
+    expect(find.text('Battery unavailable'), findsOneWidget);
+    expect(find.text('0% Battery'), findsNothing);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          patientProvider.overrideWith(
+            (ref) =>
+                PatientNotifier(useDemoData: false)
+                  ..replace(neverSyncedPatient),
+          ),
+        ],
+        child: const MaterialApp(home: LocationScreen()),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Device has not synced'), findsOneWidget);
+    expect(find.textContaining('just now'), findsNothing);
+  });
 }
 
 PatientModel _offlinePatient() => PatientModel(
@@ -374,4 +412,17 @@ PatientModel _offlinePatient() => PatientModel(
   lastSyncTime: DateTime.now().subtract(const Duration(minutes: 30)),
   safeZoneStatus: SafeZoneStatus.unknown,
   lastKnownLocationName: 'Last known location',
+);
+
+PatientModel _neverSyncedPatient() => PatientModel(
+  id: 'new-patient',
+  name: 'New Patient',
+  dateOfBirth: DateTime(1950),
+  photoUrl: '',
+  batteryLevel: null,
+  isDeviceOnline: false,
+  locationSharingEnabled: false,
+  lastSyncTime: null,
+  safeZoneStatus: SafeZoneStatus.unknown,
+  lastKnownLocationName: 'Location unavailable',
 );

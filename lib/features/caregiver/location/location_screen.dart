@@ -69,9 +69,11 @@ class LocationScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          patient.isDeviceOnline
-                              ? 'Updated ${_formatTimeAgo(patient.lastSyncTime)}'
-                              : 'Device offline • updated ${_formatTimeAgo(patient.lastSyncTime)}',
+                          patient.lastSyncTime == null
+                              ? 'Device has not synced'
+                              : patient.isDeviceOnline
+                              ? 'Updated ${_formatTimeAgo(patient.lastSyncTime!)}'
+                              : 'Device offline • updated ${_formatTimeAgo(patient.lastSyncTime!)}',
                           style: TextStyle(
                             fontSize: 12,
                             color: patient.isDeviceOnline

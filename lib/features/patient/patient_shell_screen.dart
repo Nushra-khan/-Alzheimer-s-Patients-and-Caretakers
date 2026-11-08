@@ -60,15 +60,19 @@ class PatientShellScreen extends ConsumerWidget {
                       Container(
                         width: 7,
                         height: 7,
-                        decoration: const BoxDecoration(
-                          color: AppTheme.successGreen,
+                        decoration: BoxDecoration(
+                          color: patient.isDeviceOnline
+                              ? AppTheme.successGreen
+                              : AppTheme.textSecondary,
                           shape: BoxShape.circle,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          'Synced ${_formatTimeAgo(patient.lastSyncTime)}',
+                          patient.lastSyncTime == null
+                              ? 'Never synced'
+                              : 'Synced ${_formatTimeAgo(patient.lastSyncTime!)}',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,

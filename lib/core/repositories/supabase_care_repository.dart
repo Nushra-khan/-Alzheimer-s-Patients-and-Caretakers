@@ -66,12 +66,12 @@ class SupabaseCareRepository implements CareRepository {
       dateOfBirth:
           DateTime.tryParse(patient['date_of_birth'] as String? ?? '') ?? now,
       photoUrl: '',
-      batteryLevel: 0,
+      batteryLevel: null,
       isDeviceOnline:
           lastSeen != null && now.difference(lastSeen).inMinutes < 15,
       locationSharingEnabled:
           patient['location_sharing_enabled'] as bool? ?? false,
-      lastSyncTime: lastSeen ?? now,
+      lastSyncTime: lastSeen,
       safeZoneStatus: SafeZoneStatus.unknown,
       lastKnownLocationName: 'Location unavailable',
     );

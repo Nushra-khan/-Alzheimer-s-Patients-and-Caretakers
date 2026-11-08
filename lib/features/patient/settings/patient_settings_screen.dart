@@ -65,13 +65,17 @@ class PatientSettingsScreen extends ConsumerWidget {
                               Icon(
                                 Icons.battery_charging_full_rounded,
                                 size: 18,
-                                color: patient.batteryLevel > 20
+                                color: patient.batteryLevel == null
+                                    ? AppTheme.textSecondary
+                                    : patient.batteryLevel! > 20
                                     ? AppTheme.successGreen
                                     : AppTheme.alertRed,
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '${patient.batteryLevel}% Battery',
+                                patient.batteryLevel == null
+                                    ? 'Battery unavailable'
+                                    : '${patient.batteryLevel}% Battery',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,

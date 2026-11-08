@@ -28,10 +28,10 @@ class PatientModel {
   final String name;
   final DateTime dateOfBirth;
   final String photoUrl;
-  final int batteryLevel;
+  final int? batteryLevel;
   final bool isDeviceOnline;
   final bool locationSharingEnabled;
-  final DateTime lastSyncTime;
+  final DateTime? lastSyncTime;
   final SafeZoneStatus safeZoneStatus;
   final String lastKnownLocationName;
 
