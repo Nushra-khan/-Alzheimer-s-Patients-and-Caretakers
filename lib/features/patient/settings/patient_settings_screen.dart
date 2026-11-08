@@ -78,17 +78,23 @@ class PatientSettingsScreen extends ConsumerWidget {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              const Icon(
-                                Icons.wifi_rounded,
+                              Icon(
+                                patient.isDeviceOnline
+                                    ? Icons.wifi_rounded
+                                    : Icons.wifi_off_rounded,
                                 size: 18,
-                                color: AppTheme.successGreen,
+                                color: patient.isDeviceOnline
+                                    ? AppTheme.successGreen
+                                    : AppTheme.alertRed,
                               ),
                               const SizedBox(width: 4),
-                              const Text(
-                                'Connected',
+                              Text(
+                                patient.isDeviceOnline ? 'Online' : 'Offline',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: AppTheme.successGreen,
+                                  color: patient.isDeviceOnline
+                                      ? AppTheme.successGreen
+                                      : AppTheme.alertRed,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),

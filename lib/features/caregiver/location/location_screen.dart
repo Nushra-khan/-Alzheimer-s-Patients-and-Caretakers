@@ -12,6 +12,21 @@ class LocationScreen extends ConsumerWidget {
     final patient = ref.watch(patientProvider);
     final safeZone = ref.watch(safeZoneProvider);
     final isDemoMode = ref.watch(careRepositoryProvider) == null;
+    final locationStatusColor = !patient.isDeviceOnline
+        ? AppTheme.textSecondary
+        : safeZone.isPatientInside
+        ? AppTheme.successGreen
+        : AppTheme.alertRed;
+    final locationStatusContainer = !patient.isDeviceOnline
+        ? Colors.grey.shade200
+        : safeZone.isPatientInside
+        ? AppTheme.successGreenContainer
+        : AppTheme.alertRedContainer;
+    final locationStatusLabel = !patient.isDeviceOnline
+        ? 'DEVICE OFFLINE'
+        : safeZone.isPatientInside
+        ? 'SAFE ZONE'
+        : 'OUTSIDE BOUNDARY';
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
@@ -27,18 +42,16 @@ class LocationScreen extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: safeZone.isPatientInside
-                          ? AppTheme.successGreenContainer
-                          : AppTheme.alertRedContainer,
+                      color: locationStatusContainer,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      safeZone.isPatientInside
+                      !patient.isDeviceOnline
+                          ? Icons.wifi_off_rounded
+                          : safeZone.isPatientInside
                           ? Icons.my_location_rounded
                           : Icons.location_off_rounded,
-                      color: safeZone.isPatientInside
-                          ? AppTheme.successGreen
-                          : AppTheme.alertRed,
+                      color: locationStatusColor,
                       size: 24,
                     ),
                   ),
@@ -55,11 +68,15 @@ class LocationScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        const Text(
-                          'Updated 3 min ago',
+                        Text(
+                          patient.isDeviceOnline
+                              ? 'Updated ${_formatTimeAgo(patient.lastSyncTime)}'
+                              : 'Device offline • updated ${_formatTimeAgo(patient.lastSyncTime)}',
                           style: TextStyle(
                             fontSize: 12,
-                            color: AppTheme.textSecondary,
+                            color: patient.isDeviceOnline
+                                ? AppTheme.textSecondary
+                                : AppTheme.alertRed,
                           ),
                         ),
                       ],
@@ -109,16 +126,12 @@ class LocationScreen extends ConsumerWidget {
                                 290,
                               ),
                               decoration: BoxDecoration(
-                                color:
-                                    (safeZone.isPatientInside
-                                            ? AppTheme.primaryColor
-                                            : AppTheme.alertRed)
-                                        .withValues(alpha: 0.16),
+                                color: locationStatusColor.withValues(
+                                  alpha: 0.16,
+                                ),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: safeZone.isPatientInside
-                                      ? AppTheme.primaryColor
-                                      : AppTheme.alertRed,
+                                  color: locationStatusColor,
                                   width: 2.8,
                                 ),
                               ),
@@ -130,9 +143,7 @@ class LocationScreen extends ConsumerWidget {
                                     Icon(
                                       Icons.person_pin_circle_rounded,
                                       size: 52,
-                                      color: safeZone.isPatientInside
-                                          ? AppTheme.primaryColor
-                                          : AppTheme.alertRed,
+                                      color: locationStatusColor,
                                     ),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
@@ -266,21 +277,15 @@ class LocationScreen extends ConsumerWidget {
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: safeZone.isPatientInside
-                                      ? AppTheme.successGreenContainer
-                                      : AppTheme.alertRedContainer,
+                                  color: locationStatusContainer,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  safeZone.isPatientInside
-                                      ? 'SAFE ZONE'
-                                      : 'OUTSIDE BOUNDARY',
+                                  locationStatusLabel,
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: safeZone.isPatientInside
-                                        ? AppTheme.successGreen
-                                        : AppTheme.alertRed,
+                                    color: locationStatusColor,
                                   ),
                                 ),
                               ),
@@ -305,6 +310,14 @@ class LocationScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _formatTimeAgo(DateTime time) {
+    final difference = DateTime.now().difference(time);
+    if (difference.isNegative || difference.inMinutes < 1) return 'just now';
+    if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
+    if (difference.inHours < 24) return '${difference.inHours}h ago';
+    return '${difference.inDays}d ago';
   }
 
   void _showSafeZoneSettingsDialog(

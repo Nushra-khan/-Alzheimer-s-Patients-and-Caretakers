@@ -8,6 +8,8 @@ import 'package:alzheimers_care/features/caregiver/schedules/schedules_screen.da
 import 'package:alzheimers_care/features/caregiver/profile/caregiver_profile_screen.dart';
 import 'package:alzheimers_care/features/patient/today/today_screen.dart';
 import 'package:alzheimers_care/features/caregiver/dashboard/caregiver_dashboard_screen.dart';
+import 'package:alzheimers_care/features/caregiver/location/location_screen.dart';
+import 'package:alzheimers_care/core/models/models.dart';
 import 'package:alzheimers_care/core/providers/app_state.dart';
 
 void main() {
@@ -316,4 +318,60 @@ void main() {
 
     expect(refreshCount, 1);
   });
+
+  testWidgets('offline device state is shown instead of connected status', (
+    WidgetTester tester,
+  ) async {
+    final offlinePatient = _offlinePatient();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          patientProvider.overrideWith(
+            (ref) =>
+                PatientNotifier(useDemoData: false)..replace(offlinePatient),
+          ),
+        ],
+        child: const MaterialApp(home: PatientSettingsScreen()),
+      ),
+    );
+
+    expect(find.text('Offline'), findsOneWidget);
+    expect(find.text('Connected'), findsNothing);
+    expect(find.byIcon(Icons.wifi_off_rounded), findsOneWidget);
+  });
+
+  testWidgets('location view marks offline data as stale', (
+    WidgetTester tester,
+  ) async {
+    final offlinePatient = _offlinePatient();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          patientProvider.overrideWith(
+            (ref) =>
+                PatientNotifier(useDemoData: false)..replace(offlinePatient),
+          ),
+        ],
+        child: const MaterialApp(home: LocationScreen()),
+      ),
+    );
+
+    expect(find.textContaining('Device offline • updated'), findsOneWidget);
+    expect(find.text('DEVICE OFFLINE'), findsOneWidget);
+    expect(find.text('Updated 3 min ago'), findsNothing);
+    expect(find.text('SAFE ZONE'), findsNothing);
+  });
 }
+
+PatientModel _offlinePatient() => PatientModel(
+  id: 'offline-patient',
+  name: 'Offline Patient',
+  dateOfBirth: DateTime(1950),
+  photoUrl: '',
+  batteryLevel: 15,
+  isDeviceOnline: false,
+  locationSharingEnabled: true,
+  lastSyncTime: DateTime.now().subtract(const Duration(minutes: 30)),
+  safeZoneStatus: SafeZoneStatus.unknown,
+  lastKnownLocationName: 'Last known location',
+);
