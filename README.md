@@ -130,7 +130,7 @@ role key in the Flutter app or commit it to source control.
    ```
 
    The remote column in `migration list` should contain every local migration
-   from `0001` through `0012`.
+   from `0001` through `0013`.
 
 3. Check the resulting database schema:
 
@@ -227,6 +227,7 @@ flutter build appbundle --release --dart-define-from-file=config/production.json
 | `0010_routine_management.sql` | Adds audited caregiver actions to create, edit, and deactivate routine schedules |
 | `0011_emergency_contact_management.sql` | Adds validated and audited emergency-contact management through trusted functions |
 | `0012_dose_status_corrections.sql` | Adds patient-authorized taken, skipped, and corrected dose transitions with idempotent events |
+| `0013_restrict_direct_care_writes.sql` | Removes direct client writes that bypass validated and audited care-management functions |
 
 Never edit a migration that has already been applied to a shared environment.
 Create a new numbered migration for every schema or policy change.
