@@ -9,6 +9,7 @@ import 'package:alzheimers_care/features/caregiver/profile/caregiver_profile_scr
 import 'package:alzheimers_care/features/patient/today/today_screen.dart';
 import 'package:alzheimers_care/features/caregiver/dashboard/caregiver_dashboard_screen.dart';
 import 'package:alzheimers_care/features/caregiver/location/location_screen.dart';
+import 'package:alzheimers_care/features/caregiver/alerts/alerts_screen.dart';
 import 'package:alzheimers_care/core/models/models.dart';
 import 'package:alzheimers_care/core/providers/app_state.dart';
 
@@ -420,6 +421,35 @@ void main() {
     expect(find.text('Location status unavailable'), findsOneWidget);
     expect(find.text('INSIDE'), findsNothing);
     expect(find.textContaining('Inside Safe Radius'), findsNothing);
+  });
+
+  testWidgets('tapping a selected alert filter returns to all alerts', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: AlertsScreen())),
+    );
+    final activeChipFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is FilterChip &&
+          widget.label is Text &&
+          ((widget.label as Text).data ?? '').startsWith('Active'),
+    );
+    final allChipFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is FilterChip &&
+          widget.label is Text &&
+          ((widget.label as Text).data ?? '').startsWith('All'),
+    );
+
+    await tester.tap(activeChipFinder);
+    await tester.pump();
+    expect(tester.widget<FilterChip>(activeChipFinder).selected, isTrue);
+
+    await tester.tap(activeChipFinder);
+    await tester.pump();
+    expect(tester.widget<FilterChip>(activeChipFinder).selected, isFalse);
+    expect(tester.widget<FilterChip>(allChipFinder).selected, isTrue);
   });
 }
 

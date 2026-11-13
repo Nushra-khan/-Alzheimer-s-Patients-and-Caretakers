@@ -55,7 +55,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                       selected: _statusFilter == AlertStatus.active,
                       onSelected: (selected) {
                         setState(() {
-                          _statusFilter = AlertStatus.active;
+                          _statusFilter = selected ? AlertStatus.active : null;
                         });
                       },
                     ),
@@ -68,7 +68,9 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                       selectedColor: AppTheme.warningOrangeContainer,
                       onSelected: (selected) {
                         setState(() {
-                          _statusFilter = AlertStatus.acknowledged;
+                          _statusFilter = selected
+                              ? AlertStatus.acknowledged
+                              : null;
                         });
                       },
                     ),
@@ -81,7 +83,9 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                       selectedColor: AppTheme.successGreenContainer,
                       onSelected: (selected) {
                         setState(() {
-                          _statusFilter = AlertStatus.resolved;
+                          _statusFilter = selected
+                              ? AlertStatus.resolved
+                              : null;
                         });
                       },
                     ),
