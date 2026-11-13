@@ -20,6 +20,12 @@ class CaregiverDashboardScreen extends ConsumerWidget {
         .where((a) => a.status == AlertStatus.active)
         .toList();
     final pendingMeds = medications.where((m) => m.isPending).toList();
+    final hasSafeZone = safeZone.id.isNotEmpty;
+    final locationStatus = _locationStatus(
+      patient: patient,
+      safeZone: safeZone,
+      hasSafeZone: hasSafeZone,
+    );
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
@@ -283,12 +289,8 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                               child: _StatusMetricTile(
                                 icon: Icons.location_on_rounded,
                                 title: 'Safe Zone',
-                                value: safeZone.isPatientInside
-                                    ? 'INSIDE'
-                                    : 'OUTSIDE',
-                                color: safeZone.isPatientInside
-                                    ? AppTheme.successGreen
-                                    : AppTheme.alertRed,
+                                value: locationStatus.shortLabel,
+                                color: locationStatus.color,
                               ),
                             ),
                           ],
@@ -324,18 +326,12 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: safeZone.isPatientInside
-                                    ? AppTheme.successGreenContainer
-                                    : AppTheme.alertRedContainer,
+                                color: locationStatus.containerColor,
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
-                                safeZone.isPatientInside
-                                    ? Icons.fit_screen_rounded
-                                    : Icons.wrong_location_rounded,
-                                color: safeZone.isPatientInside
-                                    ? AppTheme.successGreen
-                                    : AppTheme.alertRed,
+                                locationStatus.icon,
+                                color: locationStatus.color,
                                 size: 26,
                               ),
                             ),
@@ -345,19 +341,15 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    safeZone.isPatientInside
-                                        ? 'Inside Safe Radius (${safeZone.name})'
-                                        : 'Outside Safe Zone Boundary!',
+                                    locationStatus.title,
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
-                                      color: safeZone.isPatientInside
-                                          ? AppTheme.successGreen
-                                          : AppTheme.alertRed,
+                                      color: locationStatus.color,
                                     ),
                                   ),
                                   Text(
-                                    patient.lastKnownLocationName,
+                                    locationStatus.subtitle,
                                     style: const TextStyle(
                                       fontSize: 13,
                                       color: AppTheme.textSecondary,
@@ -514,12 +506,85 @@ class CaregiverDashboardScreen extends ConsumerWidget {
     }
   }
 
+  _DashboardLocationStatus _locationStatus({
+    required PatientModel patient,
+    required SafeZoneModel safeZone,
+    required bool hasSafeZone,
+  }) {
+    if (!patient.locationSharingEnabled) {
+      return const _DashboardLocationStatus(
+        shortLabel: 'SHARING OFF',
+        title: 'Location sharing is off',
+        subtitle: 'The patient must enable sharing to update location.',
+        icon: Icons.location_disabled_rounded,
+        color: AppTheme.textSecondary,
+        containerColor: Color(0xFFF0F0F0),
+      );
+    }
+    if (!patient.isDeviceOnline || patient.lastSyncTime == null) {
+      return const _DashboardLocationStatus(
+        shortLabel: 'UNKNOWN',
+        title: 'Location status unavailable',
+        subtitle: 'The patient device is offline or has not synced.',
+        icon: Icons.location_searching_rounded,
+        color: AppTheme.textSecondary,
+        containerColor: Color(0xFFF0F0F0),
+      );
+    }
+    if (!hasSafeZone) {
+      return const _DashboardLocationStatus(
+        shortLabel: 'NOT SET',
+        title: 'Safe zone not configured',
+        subtitle: 'Create a safe zone before monitoring its boundary.',
+        icon: Icons.add_location_alt_outlined,
+        color: AppTheme.warningOrange,
+        containerColor: AppTheme.warningOrangeContainer,
+      );
+    }
+    if (safeZone.isPatientInside) {
+      return _DashboardLocationStatus(
+        shortLabel: 'INSIDE',
+        title: 'Inside Safe Radius (${safeZone.name})',
+        subtitle: patient.lastKnownLocationName,
+        icon: Icons.fit_screen_rounded,
+        color: AppTheme.successGreen,
+        containerColor: AppTheme.successGreenContainer,
+      );
+    }
+    return _DashboardLocationStatus(
+      shortLabel: 'OUTSIDE',
+      title: 'Outside Safe Zone Boundary!',
+      subtitle: patient.lastKnownLocationName,
+      icon: Icons.wrong_location_rounded,
+      color: AppTheme.alertRed,
+      containerColor: AppTheme.alertRedContainer,
+    );
+  }
+
   String _formatTimeAgo(DateTime time) {
     final diff = DateTime.now().difference(time);
     if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     return '${diff.inHours}h ago';
   }
+}
+
+class _DashboardLocationStatus {
+  const _DashboardLocationStatus({
+    required this.shortLabel,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.containerColor,
+  });
+
+  final String shortLabel;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final Color containerColor;
 }
 
 String _doseStatusLabel(DoseStatus status) => switch (status) {

@@ -399,6 +399,28 @@ void main() {
     expect(find.text('Device has not synced'), findsOneWidget);
     expect(find.textContaining('just now'), findsNothing);
   });
+
+  testWidgets('caregiver dashboard does not mark offline location as safe', (
+    WidgetTester tester,
+  ) async {
+    final offlinePatient = _offlinePatient();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          patientProvider.overrideWith(
+            (ref) =>
+                PatientNotifier(useDemoData: false)..replace(offlinePatient),
+          ),
+        ],
+        child: const MaterialApp(home: CaregiverDashboardScreen()),
+      ),
+    );
+
+    expect(find.text('UNKNOWN'), findsOneWidget);
+    expect(find.text('Location status unavailable'), findsOneWidget);
+    expect(find.text('INSIDE'), findsNothing);
+    expect(find.textContaining('Inside Safe Radius'), findsNothing);
+  });
 }
 
 PatientModel _offlinePatient() => PatientModel(
