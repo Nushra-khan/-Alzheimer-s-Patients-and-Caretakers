@@ -12,6 +12,7 @@ class LocationScreen extends ConsumerWidget {
     final patient = ref.watch(patientProvider);
     final safeZone = ref.watch(safeZoneProvider);
     final isDemoMode = ref.watch(careRepositoryProvider) == null;
+    final hasSafeZone = safeZone.id.isNotEmpty;
     final locationStatusColor = !patient.isDeviceOnline
         ? AppTheme.textSecondary
         : safeZone.isPatientInside
@@ -91,9 +92,13 @@ class LocationScreen extends ConsumerWidget {
                       size: 26,
                     ),
                     tooltip: 'Safe zone',
-                    onPressed: () {
-                      _showSafeZoneSettingsDialog(context, ref, safeZone);
-                    },
+                    onPressed: hasSafeZone
+                        ? () => _showSafeZoneSettingsDialog(
+                            context,
+                            ref,
+                            safeZone,
+                          )
+                        : null,
                   ),
                 ],
               ),
@@ -305,6 +310,10 @@ class LocationScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  if (!hasSafeZone)
+                    const Positioned.fill(
+                      child: AbsorbPointer(child: _NoSafeZoneView()),
+                    ),
                 ],
               ),
             ),
@@ -400,6 +409,51 @@ class LocationScreen extends ConsumerWidget {
               child: const Text('Save'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoSafeZoneView extends StatelessWidget {
+  const _NoSafeZoneView();
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: AppTheme.backgroundLight,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: const BoxDecoration(
+                  color: AppTheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.add_location_alt_outlined,
+                  color: AppTheme.primaryColor,
+                  size: 42,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Safe zone not configured',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Boundary monitoring will become available after a safe zone is created.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
         ),
       ),
     );

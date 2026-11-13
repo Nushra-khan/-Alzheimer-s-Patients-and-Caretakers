@@ -451,6 +451,30 @@ void main() {
     expect(tester.widget<FilterChip>(activeChipFinder).selected, isFalse);
     expect(tester.widget<FilterChip>(allChipFinder).selected, isTrue);
   });
+
+  testWidgets('location view blocks edits when no safe zone exists', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          safeZoneProvider.overrideWith(
+            (ref) => SafeZoneNotifier(useDemoData: false),
+          ),
+        ],
+        child: const MaterialApp(home: LocationScreen()),
+      ),
+    );
+
+    expect(find.text('Safe zone not configured'), findsOneWidget);
+    final safeZoneButton = find.byWidgetPredicate(
+      (widget) =>
+          widget is IconButton &&
+          widget.icon is Icon &&
+          (widget.icon as Icon).icon == Icons.tune_rounded,
+    );
+    expect(tester.widget<IconButton>(safeZoneButton).onPressed, isNull);
+  });
 }
 
 PatientModel _offlinePatient() => PatientModel(
