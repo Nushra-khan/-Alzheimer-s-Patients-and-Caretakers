@@ -67,6 +67,18 @@ class AuthService {
     await _client.auth.updateUser(UserAttributes(password: password));
   }
 
+  /// The role chosen at sign-up, for use when the database cannot be reached.
+  /// Mirrors handle_new_auth_user, which makes every account without the
+  /// patient role a caregiver.
+  UserRole? get roleFromAccountMetadata {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+    final role = (user.userMetadata?['role'] as String?)?.trim().toLowerCase();
+    return role == UserRole.patient.name
+        ? UserRole.patient
+        : UserRole.caregiver;
+  }
+
   Future<UserRole> resolveCurrentUserRole() async {
     final user = _client.auth.currentUser;
     if (user == null) {

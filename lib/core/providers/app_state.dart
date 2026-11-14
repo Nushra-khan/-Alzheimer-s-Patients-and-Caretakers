@@ -105,8 +105,22 @@ class SessionNotifier extends StateNotifier<AppSession> {
     try {
       final role = await _configuredAuth.resolveCurrentUserRole();
       establishAuthenticatedSession(role);
-    } catch (_) {
-      state = const AppSession.signedOut();
+    } catch (error) {
+      final isNetworkFailure =
+          error is AuthRetryableFetchException ||
+          (error is! AuthException && error is! PostgrestException);
+      if (!isNetworkFailure) {
+        state = const AppSession.signedOut();
+        return;
+      }
+      // The backend could not be reached (for example, the phone is offline).
+      // Keep a still-valid Supabase session signed in using the role stored on
+      // the account; RLS still decides what data the user can load.
+      debugPrint('Unable to confirm account role: $error');
+      final role = _configuredAuth.roleFromAccountMetadata;
+      state = role == null
+          ? const AppSession.signedOut()
+          : AppSession.authenticated(role);
     }
   }
 
@@ -243,6 +257,10 @@ class DoseInstanceNotifier extends StateNotifier<List<DoseInstance>> {
 
   final CareRepository? _repository;
 
+  /// Request keys for dose updates that have not been confirmed yet. A retry
+  /// of the same action reuses its key so the backend applies it only once.
+  final _pendingDoseActions = <String, ({String key, DateTime occurredAt})>{};
+
   void replace(List<DoseInstance> doses) => state = doses;
 
   Future<void> reportDoseTaken(String id) async {
@@ -258,14 +276,20 @@ class DoseInstanceNotifier extends StateNotifier<List<DoseInstance>> {
   }
 
   Future<void> _setDoseStatus(String id, DoseStatus status) async {
-    final occurredAt = DateTime.now();
+    final action = 'dose:$id:${status.name}';
+    final pending = _pendingDoseActions.putIfAbsent(action, () {
+      final now = DateTime.now();
+      return (key: '$action:${now.microsecondsSinceEpoch}', occurredAt: now);
+    });
+    final occurredAt = pending.occurredAt;
     await _repository?.updateDoseStatus(
       doseInstanceId: id,
       status: status,
-      idempotencyKey:
-          'dose:$id:${status.name}:${occurredAt.microsecondsSinceEpoch}',
+      idempotencyKey: pending.key,
       occurredAt: occurredAt,
     );
+    // Any confirmed change supersedes earlier unconfirmed actions on this dose.
+    _pendingDoseActions.removeWhere((key, _) => key.startsWith('dose:$id:'));
     state = state.map((dose) {
       if (dose.id != id) return dose;
       return dose.copyWith(
@@ -507,21 +531,35 @@ class AlertNotifier extends StateNotifier<List<AlertModel>> {
 
   final CareRepository? _repository;
 
+  /// The SOS that has not been confirmed by the backend yet. Pressing SOS
+  /// again after a failure retries the same alert instead of creating another.
+  ({String patientId, String key, DateTime occurredAt})? _pendingSos;
+
   void replace(List<AlertModel> alerts) => state = alerts;
 
   Future<void> triggerSOSAlert({
     required String patientId,
     required String patientName,
   }) async {
-    final occurredAt = DateTime.now();
-    final localKey = occurredAt.microsecondsSinceEpoch.toString();
+    var pending = _pendingSos;
+    if (pending == null || pending.patientId != patientId) {
+      final now = DateTime.now();
+      pending = (
+        patientId: patientId,
+        key: 'sos:$patientId:${now.microsecondsSinceEpoch}',
+        occurredAt: now,
+      );
+      _pendingSos = pending;
+    }
+    final occurredAt = pending.occurredAt;
     final backendId = await _repository?.createSos(
       patientId: patientId,
-      idempotencyKey: 'sos:$patientId:$localKey',
+      idempotencyKey: pending.key,
       occurredAt: occurredAt,
     );
+    _pendingSos = null;
     final sosAlert = AlertModel(
-      id: backendId ?? 'alt-$localKey',
+      id: backendId ?? 'alt-${occurredAt.microsecondsSinceEpoch}',
       patientId: patientId,
       patientName: patientName,
       type: AlertType.sos,
@@ -532,7 +570,7 @@ class AlertNotifier extends StateNotifier<List<AlertModel>> {
       timestamp: occurredAt,
       status: AlertStatus.active,
     );
-    state = [sosAlert, ...state];
+    state = [sosAlert, ...state.where((alert) => alert.id != sosAlert.id)];
   }
 
   Future<void> acknowledgeAlert(String alertId, String caregiverName) async {

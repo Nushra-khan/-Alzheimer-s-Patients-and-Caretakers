@@ -12,9 +12,14 @@ class SupabaseCareRepository implements CareRepository {
 
   @override
   Future<String> resolveAccessiblePatientId() async {
+    // RLS limits this to the user's own patient record or patients they care
+    // for. Order by creation so a caregiver linked to several patients always
+    // gets the same one instead of whichever row Postgres returns first.
     final row = await _client
         .from('patients')
         .select('id')
+        .order('created_at')
+        .order('id')
         .limit(1)
         .maybeSingle();
     final id = row?['id'] as String?;
@@ -84,6 +89,7 @@ class SupabaseCareRepository implements CareRepository {
   ) async {
     final start = DateTime(day.year, day.month, day.day);
     final end = start.add(const Duration(days: 1));
+    await _ensureDoseInstances(patientId, start);
     final doseRows = await _client
         .from('dose_instances')
         .select('id, schedule_id, scheduled_for, status')
@@ -143,9 +149,39 @@ class SupabaseCareRepository implements CareRepository {
         .toList();
   }
 
+  /// Creates the day's doses for daily schedules and marks missed doses as
+  /// overdue. Tolerates a backend where migration 0014 is not applied yet.
+  Future<void> _ensureDoseInstances(String patientId, DateTime day) async {
+    try {
+      await _client.rpc<void>(
+        'ensure_dose_instances',
+        params: {
+          'target_patient_id': patientId,
+          'target_local_date': _dateOnly(day),
+        },
+      );
+    } on PostgrestException catch (error) {
+      if (!error.message.contains('ensure_dose_instances')) rethrow;
+    }
+  }
+
+  Future<String> _patientName(String patientId) async {
+    final patient = await _client
+        .from('patients')
+        .select('profile_id')
+        .eq('id', patientId)
+        .single();
+    final profile = await _client
+        .from('profiles')
+        .select('display_name')
+        .eq('id', patient['profile_id'] as String)
+        .maybeSingle();
+    return profile?['display_name'] as String? ?? 'Patient';
+  }
+
   @override
   Future<List<AlertModel>> loadAlerts(String patientId) async {
-    final patient = await loadPatient(patientId);
+    final patientName = await _patientName(patientId);
     final rows = await _client
         .from('alerts')
         .select(
@@ -159,7 +195,7 @@ class SupabaseCareRepository implements CareRepository {
           (row) => AlertModel(
             id: row['id'] as String,
             patientId: row['patient_id'] as String,
-            patientName: patient.name,
+            patientName: patientName,
             type: _alertType(row['type'] as String? ?? ''),
             severity: _alertSeverity(row['severity'] as String? ?? 'info'),
             title: row['title'] as String? ?? 'Alert',
