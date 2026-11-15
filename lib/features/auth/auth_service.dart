@@ -57,6 +57,8 @@ class AuthService {
       email: email.trim(),
       password: password,
       data: {'display_name': displayName.trim(), 'role': role.name},
+      // The confirmation link in the email opens the app and signs in.
+      emailRedirectTo: kIsWeb ? _webRedirectUrl : googleCallbackUrl,
     );
 
     return response.session != null;
