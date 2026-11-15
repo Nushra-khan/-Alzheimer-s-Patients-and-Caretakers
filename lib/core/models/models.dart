@@ -4,9 +4,19 @@ class AppSession {
   final UserRole? role;
   final bool isAuthenticated;
 
-  const AppSession._({required this.role, required this.isAuthenticated});
+  /// True while a saved sign-in is being checked at app start.
+  final bool isRestoring;
+
+  const AppSession._({
+    required this.role,
+    required this.isAuthenticated,
+    this.isRestoring = false,
+  });
 
   const AppSession.signedOut() : this._(role: null, isAuthenticated: false);
+
+  const AppSession.restoring()
+    : this._(role: null, isAuthenticated: false, isRestoring: true);
 
   const AppSession.authenticated(UserRole role)
     : this._(role: role, isAuthenticated: true);
@@ -16,6 +26,16 @@ class AppSession {
   const AppSession.needsRole() : this._(role: null, isAuthenticated: true);
 
   bool get needsRole => isAuthenticated && role == null;
+
+  @override
+  bool operator ==(Object other) =>
+      other is AppSession &&
+      other.role == role &&
+      other.isAuthenticated == isAuthenticated &&
+      other.isRestoring == isRestoring;
+
+  @override
+  int get hashCode => Object.hash(role, isAuthenticated, isRestoring);
   bool get canAccessPatient => role == UserRole.patient;
   bool get canAccessCaregiver => role == UserRole.caregiver;
 }

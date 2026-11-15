@@ -35,12 +35,22 @@ class SessionNotifier extends StateNotifier<AppSession> {
         if (authState.session == null) {
           _onPasswordRecovery(false);
           state = const AppSession.signedOut();
-        } else {
-          unawaited(refreshAuthenticatedSession());
+          return;
         }
+        // A refreshed token does not change who is signed in. Re-checking the
+        // role here used to rebuild the router and reload all care data
+        // about once an hour and whenever the app came back to the front.
+        if (authState.event == AuthChangeEvent.tokenRefreshed &&
+            state.role != null) {
+          return;
+        }
+        unawaited(refreshAuthenticatedSession());
       });
 
       if (_authService!.currentSession != null) {
+        // Show a loading screen instead of flashing the login screen while
+        // the saved sign-in is checked.
+        state = const AppSession.restoring();
         unawaited(refreshAuthenticatedSession());
       }
     }
@@ -86,6 +96,9 @@ class SessionNotifier extends StateNotifier<AppSession> {
   }
 
   Future<void> signInWithGoogle() => _configuredAuth.signInWithGoogle();
+
+  Future<void> resendConfirmation(String email) =>
+      _configuredAuth.resendConfirmation(email);
 
   Future<void> sendPasswordReset(String email) =>
       _configuredAuth.sendPasswordReset(email);
@@ -145,11 +158,20 @@ class SessionNotifier extends StateNotifier<AppSession> {
   }
 
   Future<void> signOut() async {
-    if (_authService?.currentSession != null) {
-      await _authService!.signOut();
+    try {
+      if (_authService?.currentSession != null) {
+        await _authService!.signOut();
+      }
+    } finally {
+      state = const AppSession.signedOut();
     }
-    state = const AppSession.signedOut();
   }
+
+  // StateNotifier notifies listeners on every assignment, even of an equal
+  // value. Skipping equal sessions keeps the router and care data stable.
+  @override
+  bool updateShouldNotify(AppSession old, AppSession current) =>
+      old != current;
 
   @override
   void dispose() {
@@ -653,8 +675,17 @@ final careBootstrapProvider = FutureProvider<CareBootstrapStatus>((ref) async {
   try {
     patientId = await repository.resolveAccessiblePatientId();
   } on NoPatientConnectionException {
-    if (session.canAccessCaregiver) return CareBootstrapStatus.needsPatient;
-    rethrow;
+    if (!session.canAccessCaregiver) rethrow;
+    // Load the caregiver's own profile so the Profile tab works before a
+    // patient is connected.
+    final caregiver = await _withFallback<CaregiverModel?>(
+      repository.loadCurrentCaregiver(),
+      null,
+    );
+    if (caregiver != null) {
+      ref.read(currentCaregiverProvider.notifier).replace(caregiver);
+    }
+    return CareBootstrapStatus.needsPatient;
   }
   final values = await Future.wait<Object?>([
     repository.loadPatient(patientId),

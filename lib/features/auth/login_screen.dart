@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
 import '../../app/theme.dart';
 import '../../core/providers/app_state.dart';
@@ -41,9 +42,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passwordController.text,
           );
     } catch (error) {
-      if (mounted) _showError(readableAuthError(error));
+      if (!mounted) return;
+      final needsConfirmation =
+          error is AuthException && error.code == 'email_not_confirmed';
+      _showError(
+        readableAuthError(error),
+        action: needsConfirmation
+            ? SnackBarAction(label: 'Resend email', onPressed: _resend)
+            : null,
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _resend() async {
+    try {
+      await ref
+          .read(sessionProvider.notifier)
+          .resendConfirmation(_emailController.text);
+      if (mounted) {
+        _showError('Confirmation email sent. Check your inbox.');
+      }
+    } catch (error) {
+      if (mounted) _showError(readableAuthError(error));
     }
   }
 
@@ -58,10 +80,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  void _showError(String message) {
+  void _showError(String message, {SnackBarAction? action}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: action,
+          duration: Duration(seconds: action == null ? 4 : 8),
+        ),
+      );
   }
 
   @override

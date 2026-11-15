@@ -7,6 +7,7 @@ import '../features/auth/signup_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/reset_password_screen.dart';
 import '../features/auth/choose_role_screen.dart';
+import '../features/auth/loading_screen.dart';
 import '../features/patient/patient_shell_screen.dart';
 import '../features/patient/today/today_screen.dart';
 import '../features/patient/sos/sos_screen.dart';
@@ -32,6 +33,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           path == '/login' || path == '/signup' || path == '/forgot-password';
       if (isPasswordRecovery && path != resetPath) return resetPath;
       if (path == resetPath && !isPasswordRecovery) return '/login';
+      const loadingPath = '/loading';
+      if (session.isRestoring) {
+        return path == loadingPath ? null : loadingPath;
+      }
       const chooseRolePath = '/choose-role';
       if (session.needsRole) {
         return path == chooseRolePath ? null : chooseRolePath;
@@ -77,6 +82,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/reset-password',
         builder: (context, state) => const ResetPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/loading',
+        builder: (context, state) => const LoadingScreen(),
       ),
       GoRoute(
         path: '/choose-role',

@@ -18,15 +18,13 @@ class CaregiverProfileScreen extends ConsumerStatefulWidget {
 
 class _CaregiverProfileScreenState
     extends ConsumerState<CaregiverProfileScreen> {
-  bool _pushNotifications = true;
-  bool _smsAlerts = true;
-  bool _soundAlerts = true;
 
   @override
   Widget build(BuildContext context) {
     final patient = ref.watch(patientProvider);
     final caregiver = ref.watch(currentCaregiverProvider);
     final emergencyContacts = ref.watch(emergencyContactsProvider);
+    final hasPatient = patient.id.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
@@ -104,23 +102,41 @@ class _CaregiverProfileScreenState
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: ListTile(
-                leading: const Icon(
-                  Icons.badge_rounded,
-                  color: AppTheme.primaryColor,
-                ),
-                title: Text(
-                  patient.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text(
-                  'Age: ${patient.age} • Status: ${patient.isDeviceOnline ? "Device Online" : "Offline"}',
-                ),
-                trailing: const Icon(
-                  Icons.check_circle,
-                  color: AppTheme.successGreen,
-                ),
-              ),
+              child: hasPatient
+                  ? ListTile(
+                      leading: const Icon(
+                        Icons.badge_rounded,
+                        color: AppTheme.primaryColor,
+                      ),
+                      title: Text(
+                        patient.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        'Age: ${patient.age} • Status: ${patient.isDeviceOnline ? "Device Online" : "Offline"}',
+                      ),
+                      trailing: const Icon(
+                        Icons.check_circle,
+                        color: AppTheme.successGreen,
+                      ),
+                    )
+                  : ListTile(
+                      leading: const Icon(
+                        Icons.link_rounded,
+                        color: AppTheme.primaryColor,
+                      ),
+                      title: const Text(
+                        'No patient connected yet',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: const Text(
+                        'Ask the patient for their caregiver code.',
+                      ),
+                      trailing: TextButton(
+                        onPressed: () => context.go('/caregiver/dashboard'),
+                        child: const Text('Connect'),
+                      ),
+                    ),
             ),
             const SizedBox(height: 24),
 
@@ -138,39 +154,19 @@ class _CaregiverProfileScreenState
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    value: _pushNotifications,
-                    activeThumbColor: AppTheme.primaryColor,
-                    title: const Text(
-                      'Push notifications',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    onChanged: (val) =>
-                        setState(() => _pushNotifications = val),
-                  ),
-                  const Divider(height: 1),
-                  SwitchListTile(
-                    value: _smsAlerts,
-                    activeThumbColor: AppTheme.primaryColor,
-                    title: const Text(
-                      'Emergency SMS',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    onChanged: (val) => setState(() => _smsAlerts = val),
-                  ),
-                  const Divider(height: 1),
-                  SwitchListTile(
-                    value: _soundAlerts,
-                    activeThumbColor: AppTheme.primaryColor,
-                    title: const Text(
-                      'Critical alerts',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    onChanged: (val) => setState(() => _soundAlerts = val),
-                  ),
-                ],
+              child: const ListTile(
+                leading: Icon(
+                  Icons.notifications_active_outlined,
+                  color: AppTheme.primaryColor,
+                ),
+                title: Text(
+                  'Alerts appear in the app',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  'Phone notifications for SOS and missed medicines are '
+                  'coming soon. Until then, keep Memora open to see alerts.',
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -188,7 +184,9 @@ class _CaregiverProfileScreenState
                   ),
                 ),
                 OutlinedButton.icon(
-                  onPressed: () => _showContactDialog(patient.id),
+                  onPressed: hasPatient
+                      ? () => _showContactDialog(patient.id)
+                      : null,
                   icon: const Icon(Icons.person_add_alt_1_rounded, size: 19),
                   label: const Text('Add'),
                 ),

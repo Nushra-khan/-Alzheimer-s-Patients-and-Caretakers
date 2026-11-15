@@ -61,6 +61,18 @@ class AuthService {
       emailRedirectTo: kIsWeb ? _webRedirectUrl : googleCallbackUrl,
     );
 
+    // With email confirmation on, Supabase hides whether an address is
+    // already registered by returning a user with no identities and no
+    // session. Tell the person instead of waiting for an email that never
+    // comes.
+    final identities = response.user?.identities;
+    if (response.session == null && identities != null && identities.isEmpty) {
+      throw const AuthException(
+        'An account with this email already exists. Log in instead.',
+        code: 'user_already_exists',
+      );
+    }
+
     return response.session != null;
   }
 
@@ -178,8 +190,20 @@ class AuthService {
         : UserRole.caregiver;
   }
 
+  Future<void> resendConfirmation(String email) => _client.auth.resend(
+    type: OtpType.signup,
+    email: email.trim(),
+    emailRedirectTo: kIsWeb ? _webRedirectUrl : googleCallbackUrl,
+  );
+
   Future<void> signOut() async {
-    await _client.auth.signOut();
+    try {
+      // Clears the session on this phone first; only the server call can
+      // fail (for example, offline), which must not block signing out.
+      await _client.auth.signOut();
+    } catch (error) {
+      debugPrint('Server sign-out failed: $error');
+    }
     // Forget the Google account too, so the picker appears on next sign-in.
     if (_googleInitialization != null) {
       try {
@@ -192,7 +216,45 @@ class AuthService {
 }
 
 String readableAuthError(Object error) {
-  if (error is AuthException) return error.message;
+  if (error is AuthException) {
+    final String? message = switch (error.code) {
+      'invalid_credentials' => 'Wrong email or password.',
+      'email_not_confirmed' =>
+        'Please confirm your email first. Check your inbox for the Memora '
+            'email.',
+      'user_already_exists' || 'email_exists' =>
+        'An account with this email already exists. Log in instead.',
+      'weak_password' => 'Choose a stronger password (at least 8 characters).',
+      'same_password' => 'Choose a password different from your old one.',
+      'over_email_send_rate_limit' =>
+        'Too many emails were sent. Wait a few minutes and try again.',
+      'over_request_rate_limit' =>
+        'Too many attempts. Wait a minute and try again.',
+      'signup_disabled' => 'New sign-ups are turned off right now.',
+      'otp_expired' ||
+      'flow_state_expired' ||
+      'flow_state_not_found' ||
+      'bad_code_verifier' => 'This link has expired. Request a new one.',
+      _ => null,
+    };
+    if (message != null) return message;
+    if (error is AuthRetryableFetchException) return _offlineMessage;
+    if (error.message.contains('Invalid login credentials')) {
+      return 'Wrong email or password.';
+    }
+    return error.message;
+  }
   if (error is PostgrestException) return error.message;
+  if (_looksOffline(error)) return _offlineMessage;
   return 'Something went wrong. Please try again.';
+}
+
+const _offlineMessage =
+    'No internet connection. Check your network and try again.';
+
+bool _looksOffline(Object error) {
+  final text = error.toString();
+  return text.contains('SocketException') ||
+      text.contains('ClientException') ||
+      text.contains('Failed host lookup');
 }
