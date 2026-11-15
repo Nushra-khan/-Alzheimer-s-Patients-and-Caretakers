@@ -140,9 +140,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               if ((value ?? '').isEmpty) {
                                 return 'Enter your password';
                               }
-                              if ((value ?? '').length < 6) {
-                                return 'Password must be at least 6 characters';
-                              }
                               return null;
                             },
                             decoration: InputDecoration(

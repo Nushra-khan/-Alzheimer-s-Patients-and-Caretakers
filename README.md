@@ -130,7 +130,7 @@ role key in the Flutter app or commit it to source control.
    ```
 
    The remote column in `migration list` should contain every local migration
-   from `0001` through `0014`.
+   from `0001` through `0015`.
 
 3. Check the resulting database schema:
 
@@ -151,7 +151,8 @@ environment values are not accidentally committed.
 {
   "SUPABASE_URL": "https://YOUR_PROJECT_REF.supabase.co",
   "SUPABASE_PUBLISHABLE_KEY": "YOUR_PUBLIC_PUBLISHABLE_KEY",
-  "CARE_TIMEZONE": "Asia/Kolkata"
+  "CARE_TIMEZONE": "Asia/Kolkata",
+  "GOOGLE_WEB_CLIENT_ID": "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
 }
 ```
 
@@ -168,26 +169,40 @@ publishable key is missing.
 
 ## 🔐 Google sign-in
 
-The app uses this deep-link callback:
+Android uses Google's native account picker. The web build and iOS use the
+browser flow through Supabase, which returns to the app at:
 
 ```text
-io.supabase.memora://login-callback
+io.supabase.memora://login-callback   (Android/iOS)
+http://localhost:3000                 (local web build; add your deployed URL too)
 ```
 
-To enable Google authentication:
+1. In Google Cloud, create an OAuth client of type **Web application**. Add
+   `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback` as an authorized
+   redirect URI. Keep its client ID and secret.
+2. Create an OAuth client of type **Android** with the app's package name and
+   the SHA-1 of every signing key you use (debug now, release and Play App
+   Signing later). Get the debug SHA-1 with `cd android && ./gradlew signingReport`.
+3. In **Supabase Dashboard > Authentication > Providers > Google**, enable
+   Google, enter the web client ID and secret, and add the Android client ID to
+   the client IDs list (comma-separated after the web client ID).
+4. Under **Authentication > URL Configuration**, add
+   `io.supabase.memora://login-callback`, `io.supabase.memora://reset-password`,
+   and each web origin (for example `http://localhost:3000`) to the allowed
+   redirect URLs.
+5. Add the web client ID to `config/staging.json`:
 
-1. Create OAuth credentials in Google Cloud for the Supabase callback URL shown
-   in the Supabase Google provider settings.
-2. Enable Google under **Supabase Dashboard > Authentication > Providers** and
-   enter the Google client ID and secret.
-3. Add `io.supabase.memora://login-callback` to the allowed redirect URLs under
-   **Authentication > URL Configuration**.
-4. Add `io.supabase.memora://reset-password` to the same allowed redirect list
-   so password-recovery emails can return to the app.
-5. Restart the app and test login and password recovery on a physical device.
+   ```json
+   "GOOGLE_WEB_CLIENT_ID": "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
+   ```
 
-The Android intent filter and iOS URL scheme are already configured in the
-repository.
+   Without it, Android falls back to the browser flow.
+
+Run the web build on a fixed port so it matches the redirect URL:
+
+```console
+flutter run -d chrome --web-port 3000 --dart-define-from-file=config/staging.json
+```
 
 ## ✅ Quality checks
 
@@ -229,6 +244,7 @@ flutter build appbundle --release --dart-define-from-file=config/production.json
 | `0012_dose_status_corrections.sql` | Adds patient-authorized taken, skipped, and corrected dose transitions with idempotent events |
 | `0013_restrict_direct_care_writes.sql` | Removes direct client writes that bypass validated and audited care-management functions |
 | `0014_daily_dose_generation.sql` | Creates each day's doses for daily medication schedules and marks missed doses overdue with a caregiver alert |
+| `0015_account_role_selection.sql` | Lets accounts created with Google choose patient or caregiver instead of defaulting to caregiver |
 
 Never edit a migration that has already been applied to a shared environment.
 Create a new numbered migration for every schema or policy change.

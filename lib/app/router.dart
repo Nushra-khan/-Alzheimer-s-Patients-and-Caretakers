@@ -6,6 +6,7 @@ import '../features/auth/login_screen.dart';
 import '../features/auth/signup_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/reset_password_screen.dart';
+import '../features/auth/choose_role_screen.dart';
 import '../features/patient/patient_shell_screen.dart';
 import '../features/patient/today/today_screen.dart';
 import '../features/patient/sos/sos_screen.dart';
@@ -31,12 +32,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           path == '/login' || path == '/signup' || path == '/forgot-password';
       if (isPasswordRecovery && path != resetPath) return resetPath;
       if (path == resetPath && !isPasswordRecovery) return '/login';
+      const chooseRolePath = '/choose-role';
+      if (session.needsRole) {
+        return path == chooseRolePath ? null : chooseRolePath;
+      }
+      if (path == chooseRolePath) {
+        if (!session.isAuthenticated) return '/login';
+        return session.canAccessPatient
+            ? '/patient/today'
+            : '/caregiver/dashboard';
+      }
       if (isPublic && session.isAuthenticated) {
         return session.canAccessPatient
             ? '/patient/today'
             : '/caregiver/dashboard';
       }
       if (isPublic) return null;
+      final isKnownPath =
+          path.startsWith('/patient/') || path.startsWith('/caregiver/');
+      if (!isKnownPath) {
+        if (!session.isAuthenticated) return '/login';
+        return session.canAccessPatient
+            ? '/patient/today'
+            : '/caregiver/dashboard';
+      }
       if (path.startsWith('/patient') && !session.canAccessPatient) {
         return '/login';
       }
@@ -58,6 +77,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/reset-password',
         builder: (context, state) => const ResetPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/choose-role',
+        builder: (context, state) => const ChooseRoleScreen(),
       ),
       // Patient Navigation Shell
       ShellRoute(

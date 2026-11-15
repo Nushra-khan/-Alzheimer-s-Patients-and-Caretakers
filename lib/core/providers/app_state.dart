@@ -17,6 +17,10 @@ final careRepositoryProvider = Provider<CareRepository?>((ref) {
 
 final passwordRecoveryProvider = StateProvider<bool>((ref) => false);
 
+/// Role picked on the sign-up screen before choosing Google, used to
+/// preselect the choice on the role screen after Google returns.
+final pendingSignupRoleProvider = StateProvider<UserRole?>((ref) => null);
+
 class SessionNotifier extends StateNotifier<AppSession> {
   SessionNotifier({void Function(bool)? onPasswordRecovery})
     : _onPasswordRecovery = onPasswordRecovery ?? _ignorePasswordRecovery,
@@ -62,7 +66,7 @@ class SessionNotifier extends StateNotifier<AppSession> {
       email: email,
       password: password,
     );
-    establishAuthenticatedSession(role);
+    _applyRole(role);
   }
 
   Future<bool> signUp({
@@ -104,7 +108,7 @@ class SessionNotifier extends StateNotifier<AppSession> {
   Future<void> refreshAuthenticatedSession() async {
     try {
       final role = await _configuredAuth.resolveCurrentUserRole();
-      establishAuthenticatedSession(role);
+      _applyRole(role);
     } catch (error) {
       final isNetworkFailure =
           error is AuthRetryableFetchException ||
@@ -126,6 +130,18 @@ class SessionNotifier extends StateNotifier<AppSession> {
 
   void establishAuthenticatedSession(UserRole role) {
     state = AppSession.authenticated(role);
+  }
+
+  void _applyRole(UserRole? role) {
+    state = role == null
+        ? const AppSession.needsRole()
+        : AppSession.authenticated(role);
+  }
+
+  /// Completes setup for an account that signed in without a role.
+  Future<void> chooseRole(UserRole role) async {
+    final chosen = await _configuredAuth.chooseRole(role);
+    establishAuthenticatedSession(chosen);
   }
 
   Future<void> signOut() async {
@@ -629,7 +645,7 @@ Future<T> _withFallback<T>(Future<T> request, T fallback) async {
 final careBootstrapProvider = FutureProvider<CareBootstrapStatus>((ref) async {
   final session = ref.watch(sessionProvider);
   final repository = ref.watch(careRepositoryProvider);
-  if (!session.isAuthenticated || repository == null) {
+  if (session.role == null || repository == null) {
     return CareBootstrapStatus.ready;
   }
 
@@ -700,7 +716,7 @@ Future<void> refreshCareData(WidgetRef ref) async {
 final careRealtimeProvider = StreamProvider<void>((ref) async* {
   final session = ref.watch(sessionProvider);
   final repository = ref.watch(careRepositoryProvider);
-  if (!session.isAuthenticated || repository == null) return;
+  if (session.role == null || repository == null) return;
 
   late final String patientId;
   try {

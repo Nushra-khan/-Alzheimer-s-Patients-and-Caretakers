@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/theme.dart';
 import '../../core/models/models.dart';
 import '../../core/providers/app_state.dart';
 import 'auth_background.dart';
@@ -59,6 +60,22 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         ),
       );
       context.go('/login');
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(readableAuthError(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _continueWithGoogle() async {
+    ref.read(pendingSignupRoleProvider.notifier).state = _role;
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(sessionProvider.notifier).signInWithGoogle();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -232,6 +249,47 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                     ),
                                   )
                                 : const Text('Sign up'),
+                          ),
+                          const SizedBox(height: 22),
+                          const Row(
+                            children: [
+                              Expanded(child: Divider()),
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 14),
+                                child: Text(
+                                  'OR',
+                                  style: TextStyle(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                              Expanded(child: Divider()),
+                            ],
+                          ),
+                          const SizedBox(height: 22),
+                          OutlinedButton(
+                            onPressed: _isLoading ? null : _continueWithGoogle,
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'G',
+                                  style: TextStyle(
+                                    color: Color(0xFF4285F4),
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Flexible(
+                                  child: Text(
+                                    'Sign up with Google',
+                                    overflow: TextOverflow.fade,
+                                    softWrap: false,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 16),
                           Wrap(

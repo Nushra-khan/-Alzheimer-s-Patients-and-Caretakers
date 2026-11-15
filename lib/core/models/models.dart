@@ -11,6 +11,11 @@ class AppSession {
   const AppSession.authenticated(UserRole role)
     : this._(role: role, isAuthenticated: true);
 
+  /// Signed in, but the account has not chosen patient or caregiver yet
+  /// (for example, a first sign-in with Google).
+  const AppSession.needsRole() : this._(role: null, isAuthenticated: true);
+
+  bool get needsRole => isAuthenticated && role == null;
   bool get canAccessPatient => role == UserRole.patient;
   bool get canAccessCaregiver => role == UserRole.caregiver;
 }
