@@ -1,319 +1,163 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../app/theme.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/app_state.dart';
+import '../../auth/auth_service.dart';
+import '../../profile/profile_avatar.dart';
 
-class LocationScreen extends ConsumerWidget {
+/// OpenStreetMap tiles. Their policy asks apps to identify themselves.
+const _tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const _tileUserAgent = 'com.alzheimers.care';
+
+/// Shown when there is no location or safe zone yet (centre of India).
+const _fallbackCenter = LatLng(20.5937, 78.9629);
+
+class LocationScreen extends ConsumerStatefulWidget {
   const LocationScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LocationScreen> createState() => _LocationScreenState();
+}
+
+class _LocationScreenState extends ConsumerState<LocationScreen> {
+  final _mapController = MapController();
+
+  @override
+  Widget build(BuildContext context) {
     final patient = ref.watch(patientProvider);
     final safeZone = ref.watch(safeZoneProvider);
     final isDemoMode = ref.watch(careRepositoryProvider) == null;
     final hasSafeZone = safeZone.id.isNotEmpty;
-    final locationStatusColor = !patient.isDeviceOnline
-        ? AppTheme.textSecondary
-        : safeZone.isPatientInside
-        ? AppTheme.successGreen
-        : AppTheme.alertRed;
-    final locationStatusContainer = !patient.isDeviceOnline
-        ? Colors.grey.shade200
-        : safeZone.isPatientInside
-        ? AppTheme.successGreenContainer
-        : AppTheme.alertRedContainer;
-    final locationStatusLabel = !patient.isDeviceOnline
-        ? 'DEVICE OFFLINE'
-        : safeZone.isPatientInside
-        ? 'SAFE ZONE'
-        : 'OUTSIDE BOUNDARY';
+    final reported = ref.watch(patientLocationProvider);
+    // Demo data has no real position; show the demo patient at home.
+    final patientPoint = reported != null
+        ? LatLng(reported.latitude, reported.longitude)
+        : isDemoMode && hasSafeZone
+        ? LatLng(safeZone.centerLatitude, safeZone.centerLongitude)
+        : null;
+    final zoneCenter = hasSafeZone
+        ? LatLng(safeZone.centerLatitude, safeZone.centerLongitude)
+        : null;
+    final status = _statusFor(patient);
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
       body: SafeArea(
         child: Column(
           children: [
-            // Map Header Control Bar
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              color: Colors.white,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: locationStatusContainer,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      !patient.isDeviceOnline
-                          ? Icons.wifi_off_rounded
-                          : safeZone.isPatientInside
-                          ? Icons.my_location_rounded
-                          : Icons.location_off_rounded,
-                      color: locationStatusColor,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          patient.lastKnownLocationName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          patient.lastSyncTime == null
-                              ? 'Device has not synced'
-                              : patient.isDeviceOnline
-                              ? 'Updated ${_formatTimeAgo(patient.lastSyncTime!)}'
-                              : 'Device offline • updated ${_formatTimeAgo(patient.lastSyncTime!)}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: patient.isDeviceOnline
-                                ? AppTheme.textSecondary
-                                : AppTheme.alertRed,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.tune_rounded,
-                      color: AppTheme.primaryColor,
-                      size: 26,
-                    ),
-                    tooltip: 'Safe zone',
-                    onPressed: hasSafeZone
-                        ? () => _showSafeZoneSettingsDialog(
-                            context,
-                            ref,
-                            safeZone,
-                          )
-                        : null,
-                  ),
-                ],
-              ),
+            _Header(
+              patient: patient,
+              status: status,
+              hasSafeZone: hasSafeZone,
+              onEditZone: () => _showRadiusDialog(safeZone),
             ),
             const Divider(height: 1),
-
-            // Map Display Canvas with Geofence Visualizer
             Expanded(
               child: Stack(
                 children: [
-                  // Stylized Mock Map Graphic Container
-                  Container(
-                    width: double.infinity,
-                    color: const Color(0xFFE8ECEF),
-                    child: CustomPaint(
-                      painter: _MapGridPainter(
-                        isPatientInside: safeZone.isPatientInside,
-                        radiusMeters: safeZone.radiusMeters,
-                      ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Geofence Circle representation
-                            Container(
-                              width: (safeZone.radiusMeters / 300 * 210).clamp(
-                                130,
-                                290,
-                              ),
-                              height: (safeZone.radiusMeters / 300 * 210).clamp(
-                                130,
-                                290,
-                              ),
-                              decoration: BoxDecoration(
-                                color: locationStatusColor.withValues(
-                                  alpha: 0.16,
-                                ),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: locationStatusColor,
-                                  width: 2.8,
-                                ),
-                              ),
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    // Patient Pin Icon
-                                    Icon(
-                                      Icons.person_pin_circle_rounded,
-                                      size: 52,
-                                      color: locationStatusColor,
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: const [
-                                          BoxShadow(
-                                            color: Colors.black26,
-                                            blurRadius: 6,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Text(
-                                        patient.name,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                  FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter:
+                          patientPoint ?? zoneCenter ?? _fallbackCenter,
+                      initialZoom: patientPoint != null || zoneCenter != null
+                          ? 16
+                          : 4,
+                      minZoom: 3,
+                      maxZoom: 19,
+                      onLongPress: (_, point) =>
+                          _showSaveZoneDialog(point, safeZone),
+                    ),
+                    children: [
+                      if (!isDemoMode)
+                        TileLayer(
+                          urlTemplate: _tileUrl,
+                          userAgentPackageName: _tileUserAgent,
+                        ),
+                      if (zoneCenter != null)
+                        CircleLayer(
+                          circles: [
+                            CircleMarker(
+                              point: zoneCenter,
+                              radius: safeZone.radiusMeters,
+                              useRadiusInMeter: true,
+                              color: status.color.withValues(alpha: 0.14),
+                              borderColor: status.color,
+                              borderStrokeWidth: 2,
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                  ),
-
-                  // Floating Map Controls Overlay
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    child: Column(
-                      children: [
-                        FloatingActionButton.small(
-                          heroTag: 'recenter',
-                          backgroundColor: Colors.white,
-                          foregroundColor: AppTheme.primaryColor,
-                          elevation: 3,
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Map centered')),
-                            );
-                          },
-                          child: const Icon(Icons.center_focus_strong_rounded),
-                        ),
-                        if (isDemoMode) const SizedBox(height: 10),
-                        if (isDemoMode)
-                          FloatingActionButton.small(
-                            heroTag: 'simulate',
-                            backgroundColor: safeZone.isPatientInside
-                                ? AppTheme.alertRed
-                                : AppTheme.successGreen,
-                            foregroundColor: Colors.white,
-                            elevation: 3,
-                            onPressed: () {
-                              ref
-                                  .read(safeZoneProvider.notifier)
-                                  .togglePatientInside();
-                              final newInside = ref
-                                  .read(safeZoneProvider)
-                                  .isPatientInside;
-                              if (!newInside) {
-                                ref
-                                    .read(alertsProvider.notifier)
-                                    .acknowledgeAlert(
-                                      'alt-102',
-                                      'System Advisory',
-                                    );
-                              }
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    newInside
-                                        ? 'Patient inside safe zone'
-                                        : 'Patient outside safe zone',
-                                  ),
-                                ),
-                              );
-                            },
-                            child: Icon(
-                              safeZone.isPatientInside
-                                  ? Icons.directions_run
-                                  : Icons.home_rounded,
+                      MarkerLayer(
+                        markers: [
+                          if (zoneCenter != null)
+                            Marker(
+                              point: zoneCenter,
+                              width: 34,
+                              height: 34,
+                              child: const _HomeMarker(),
                             ),
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  // Bottom Geofence Info Card Overlay
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 16,
-                    child: Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 12,
-                            offset: Offset(0, 4),
-                          ),
+                          if (patientPoint != null)
+                            Marker(
+                              point: patientPoint,
+                              width: 48,
+                              height: 48,
+                              child: _PatientMarker(
+                                color: status.color,
+                                name: patient.name,
+                                photoUrl: patient.photoUrl,
+                              ),
+                            ),
                         ],
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                safeZone.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 17,
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: locationStatusContainer,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  locationStatusLabel,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: locationStatusColor,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Radius: ${safeZone.radiusMeters.toInt()} m',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
+                    ],
+                  ),
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: _StatusPill(status: status),
+                  ),
+                  if (patientPoint != null)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: FloatingActionButton.small(
+                        heroTag: 'center-on-patient',
+                        tooltip: 'Center on patient',
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppTheme.primaryColor,
+                        onPressed: () => _mapController.move(patientPoint, 16),
+                        child: const Icon(Icons.my_location_rounded),
                       ),
                     ),
-                  ),
-                  if (!hasSafeZone)
-                    const Positioned.fill(
-                      child: AbsorbPointer(child: _NoSafeZoneView()),
+                  if (patientPoint == null && !isDemoMode)
+                    Center(
+                      child: _MapMessage(
+                        icon: Icons.location_searching_rounded,
+                        text: patient.locationSharingEnabled
+                            ? 'Waiting for the first location from the '
+                                  "patient's phone."
+                            : "Location sharing is off on the patient's "
+                                  'phone. Ask them to turn it on in Settings.',
+                      ),
                     ),
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
+                    child: _ZoneCard(
+                      safeZone: safeZone,
+                      hasSafeZone: hasSafeZone,
+                      canUsePatientLocation: patientPoint != null,
+                      onUsePatientLocation: patientPoint == null
+                          ? null
+                          : () => _showSaveZoneDialog(patientPoint, safeZone),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -323,25 +167,148 @@ class LocationScreen extends ConsumerWidget {
     );
   }
 
-  String _formatTimeAgo(DateTime time) {
-    final difference = DateTime.now().difference(time);
-    if (difference.isNegative || difference.inMinutes < 1) return 'just now';
-    if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
-    if (difference.inHours < 24) return '${difference.inHours}h ago';
-    return '${difference.inDays}d ago';
+  _LocationStatusView _statusFor(PatientModel patient) {
+    if (!patient.isDeviceOnline) {
+      return const _LocationStatusView(
+        label: 'DEVICE OFFLINE',
+        color: AppTheme.textSecondary,
+        background: Color(0xFFEEEEEE),
+        icon: Icons.wifi_off_rounded,
+      );
+    }
+    return switch (patient.safeZoneStatus) {
+      SafeZoneStatus.inside => const _LocationStatusView(
+        label: 'SAFE ZONE',
+        color: AppTheme.successGreen,
+        background: AppTheme.successGreenContainer,
+        icon: Icons.my_location_rounded,
+      ),
+      SafeZoneStatus.outside => const _LocationStatusView(
+        label: 'OUTSIDE BOUNDARY',
+        color: AppTheme.alertRed,
+        background: AppTheme.alertRedContainer,
+        icon: Icons.location_off_rounded,
+      ),
+      _ => const _LocationStatusView(
+        label: 'STATUS UNKNOWN',
+        color: AppTheme.warningOrange,
+        background: AppTheme.warningOrangeContainer,
+        icon: Icons.location_searching_rounded,
+      ),
+    };
   }
 
-  void _showSafeZoneSettingsDialog(
-    BuildContext context,
-    WidgetRef ref,
-    SafeZoneModel safeZone,
-  ) {
-    double tempRadius = safeZone.radiusMeters;
+  String get _patientId => ref.read(patientProvider).id;
 
-    showDialog(
+  Future<void> _showSaveZoneDialog(LatLng point, SafeZoneModel current) async {
+    final nameController = TextEditingController(
+      text: current.id.isEmpty ? 'Home' : current.name,
+    );
+    var radius = current.id.isEmpty
+        ? 300.0
+        : current.radiusMeters.clamp(50, 2000).toDouble();
+    var saving = false;
+
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setStateDialog) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            current.id.isEmpty ? 'Create safe zone' : 'Move safe zone',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: nameController,
+                textCapitalization: TextCapitalization.words,
+                maxLength: 80,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              Text(
+                'Radius: ${radius.round()} m',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              Slider(
+                value: radius,
+                min: 50,
+                max: 2000,
+                divisions: 39,
+                activeColor: AppTheme.primaryColor,
+                label: '${radius.round()} m',
+                onChanged: saving
+                    ? null
+                    : (value) => setDialogState(() => radius = value),
+              ),
+              const Text(
+                'You will get an alert when the patient leaves this area.',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setDialogState(() => saving = true);
+                      try {
+                        await ref
+                            .read(safeZoneProvider.notifier)
+                            .saveZone(
+                              patientId: _patientId,
+                              name: nameController.text,
+                              latitude: point.latitude,
+                              longitude: point.longitude,
+                              radiusMeters: radius,
+                            );
+                        if (dialogContext.mounted) {
+                          Navigator.of(dialogContext).pop();
+                        }
+                        if (ref.read(careRepositoryProvider) != null) {
+                          ref.invalidate(careBootstrapProvider);
+                        }
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Safe zone saved')),
+                        );
+                      } catch (error) {
+                        setDialogState(() => saving = false);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(readableAuthError(error))),
+                        );
+                      }
+                    },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    nameController.dispose();
+  }
+
+  Future<void> _showRadiusDialog(SafeZoneModel safeZone) async {
+    var radius = safeZone.radiusMeters.clamp(50, 2000).toDouble();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -353,56 +320,47 @@ class LocationScreen extends ConsumerWidget {
               Text(safeZone.name),
               const SizedBox(height: 16),
               Text(
-                'Radius: ${tempRadius.toInt()} m',
+                'Radius: ${radius.round()} m',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
               ),
               Slider(
-                value: tempRadius,
-                min: 100,
-                max: 1000,
-                divisions: 18,
+                value: radius,
+                min: 50,
+                max: 2000,
+                divisions: 39,
                 activeColor: AppTheme.primaryColor,
-                label: '${tempRadius.toInt()}m',
-                onChanged: (val) {
-                  setStateDialog(() {
-                    tempRadius = val;
-                  });
-                },
+                label: '${radius.round()} m',
+                onChanged: (value) => setDialogState(() => radius = value),
               ),
-              const SizedBox(height: 8),
               const Text(
-                'Alerts when patient leaves this area',
+                'To move the zone, long-press the map at the new spot.',
                 style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
               ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancel'),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-              ),
+            FilledButton(
               onPressed: () async {
                 try {
                   await ref
                       .read(safeZoneProvider.notifier)
-                      .updateRadius(tempRadius);
-                  if (!context.mounted) return;
-                  Navigator.of(ctx).pop();
+                      .updateRadius(radius.roundToDouble());
+                  if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Safe zone updated')),
                   );
-                } catch (_) {
-                  if (!context.mounted) return;
+                } catch (error) {
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Unable to update')),
+                    SnackBar(content: Text(readableAuthError(error))),
                   );
                 }
               },
@@ -415,72 +373,261 @@ class LocationScreen extends ConsumerWidget {
   }
 }
 
-class _NoSafeZoneView extends StatelessWidget {
-  const _NoSafeZoneView();
+class _LocationStatusView {
+  const _LocationStatusView({
+    required this.label,
+    required this.color,
+    required this.background,
+    required this.icon,
+  });
+
+  final String label;
+  final Color color;
+  final Color background;
+  final IconData icon;
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.patient,
+    required this.status,
+    required this.hasSafeZone,
+    required this.onEditZone,
+  });
+
+  final PatientModel patient;
+  final _LocationStatusView status;
+  final bool hasSafeZone;
+  final VoidCallback onEditZone;
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: AppTheme.backgroundLight,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: const BoxDecoration(
-                  color: AppTheme.primaryContainer,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.add_location_alt_outlined,
-                  color: AppTheme.primaryColor,
-                  size: 42,
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Safe zone not configured',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Boundary monitoring will become available after a safe zone is created.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.textSecondary),
-              ),
-            ],
+    final lastSync = patient.lastSyncTime;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      color: Colors.white,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: status.background,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(status.icon, color: status.color, size: 24),
           ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  patient.lastKnownLocationName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  lastSync == null
+                      ? 'Device has not synced'
+                      : patient.isDeviceOnline
+                      ? 'Updated ${_formatTimeAgo(lastSync)}'
+                      : 'Device offline • updated ${_formatTimeAgo(lastSync)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: patient.isDeviceOnline
+                        ? AppTheme.textSecondary
+                        : AppTheme.alertRed,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.tune_rounded,
+              color: AppTheme.primaryColor,
+              size: 26,
+            ),
+            tooltip: 'Safe zone',
+            onPressed: hasSafeZone ? onEditZone : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatTimeAgo(DateTime time) {
+  final difference = DateTime.now().difference(time);
+  if (difference.isNegative || difference.inMinutes < 1) return 'just now';
+  if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
+  if (difference.inHours < 24) return '${difference.inHours}h ago';
+  return '${difference.inDays}d ago';
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.status});
+
+  final _LocationStatusView status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: status.background,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: status.color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        status.label,
+        style: TextStyle(
+          color: status.color,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+          letterSpacing: 0.5,
         ),
       ),
     );
   }
 }
 
-class _MapGridPainter extends CustomPainter {
-  final bool isPatientInside;
-  final double radiusMeters;
+class _PatientMarker extends StatelessWidget {
+  const _PatientMarker({
+    required this.color,
+    required this.name,
+    required this.photoUrl,
+  });
 
-  _MapGridPainter({required this.isPatientInside, required this.radiusMeters});
+  final Color color;
+  final String name;
+  final String photoUrl;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final paintGrid = Paint()
-      ..color = Colors.black12
-      ..strokeWidth = 1.0;
-
-    const double step = 40.0;
-    for (double x = 0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paintGrid);
-    }
-    for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paintGrid);
-    }
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$name location',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: const [
+            BoxShadow(color: Colors.black26, blurRadius: 6),
+          ],
+        ),
+        child: photoUrl.isEmpty
+            ? const Icon(Icons.person_rounded, color: Colors.white)
+            : ProfileAvatar(name: name, photoUrl: photoUrl, radius: 21),
+      ),
+    );
   }
+}
+
+class _HomeMarker extends StatelessWidget {
+  const _HomeMarker();
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+      child: Icon(Icons.home_rounded, color: AppTheme.primaryColor, size: 22),
+    );
+  }
+}
+
+class _MapMessage extends StatelessWidget {
+  const _MapMessage({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppTheme.primaryColor),
+          const SizedBox(width: 12),
+          Flexible(child: Text(text)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ZoneCard extends StatelessWidget {
+  const _ZoneCard({
+    required this.safeZone,
+    required this.hasSafeZone,
+    required this.canUsePatientLocation,
+    required this.onUsePatientLocation,
+  });
+
+  final SafeZoneModel safeZone;
+  final bool hasSafeZone;
+  final bool canUsePatientLocation;
+  final VoidCallback? onUsePatientLocation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              hasSafeZone ? safeZone.name : 'Safe zone not configured',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              hasSafeZone
+                  ? 'Radius: ${safeZone.radiusMeters.round()} m • '
+                        'Long-press the map to move it.'
+                  : 'Long-press the map where the patient lives, or use '
+                        'their current location.',
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+            if (!hasSafeZone) ...[
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: canUsePatientLocation ? onUsePatientLocation : null,
+                icon: const Icon(Icons.add_location_alt_rounded),
+                label: const Text("Use patient's location"),
+              ),
+            ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  textStyle: const TextStyle(fontSize: 11),
+                  foregroundColor: AppTheme.textSecondary,
+                ),
+                onPressed: () => launchUrl(
+                  Uri.parse('https://www.openstreetmap.org/copyright'),
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: const Text('© OpenStreetMap contributors'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

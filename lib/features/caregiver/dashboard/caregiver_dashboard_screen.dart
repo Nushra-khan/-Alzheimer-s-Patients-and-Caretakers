@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/app_state.dart';
+import '../../profile/profile_avatar.dart';
 
 class CaregiverDashboardScreen extends ConsumerWidget {
   const CaregiverDashboardScreen({super.key});
@@ -170,17 +171,10 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                       children: [
                         Row(
                           children: [
-                            CircleAvatar(
+                            ProfileAvatar(
+                              name: patient.name,
+                              photoUrl: patient.photoUrl,
                               radius: 30,
-                              backgroundColor: AppTheme.primaryContainer,
-                              child: Text(
-                                patient.name.characters.first,
-                                style: const TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primaryColor,
-                                ),
-                              ),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
@@ -541,6 +535,18 @@ class CaregiverDashboardScreen extends ConsumerWidget {
         containerColor: AppTheme.warningOrangeContainer,
       );
     }
+    // A new or moved zone has no inside/outside reading until the patient's
+    // phone sends its next location.
+    if (patient.safeZoneStatus == SafeZoneStatus.unknown) {
+      return const _DashboardLocationStatus(
+        shortLabel: 'CHECKING',
+        title: 'Checking safe zone',
+        subtitle: "Waiting for the next location from the patient's phone.",
+        icon: Icons.location_searching_rounded,
+        color: AppTheme.warningOrange,
+        containerColor: AppTheme.warningOrangeContainer,
+      );
+    }
     if (safeZone.isPatientInside) {
       return _DashboardLocationStatus(
         shortLabel: 'INSIDE',
@@ -565,7 +571,8 @@ class CaregiverDashboardScreen extends ConsumerWidget {
     final diff = DateTime.now().difference(time);
     if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    return '${diff.inHours}h ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 }
 
