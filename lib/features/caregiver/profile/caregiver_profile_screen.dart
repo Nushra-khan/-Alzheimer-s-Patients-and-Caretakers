@@ -4,7 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/models/models.dart';
+import '../../../core/photos/photo_picker.dart';
 import '../../../core/providers/app_state.dart';
+import '../../auth/auth_service.dart';
+import '../../profile/account_settings_section.dart';
+import '../../profile/profile_avatar.dart';
 
 enum _ContactAction { edit, delete }
 
@@ -42,13 +46,38 @@ class _CaregiverProfileScreenState
                 padding: const EdgeInsets.all(20.0),
                 child: Row(
                   children: [
-                    const CircleAvatar(
-                      radius: 30,
-                      backgroundColor: AppTheme.primaryContainer,
-                      child: Icon(
-                        Icons.shield_rounded,
-                        size: 36,
-                        color: AppTheme.primaryColor,
+                    GestureDetector(
+                      onTap: _uploadingPhoto ? null : _changeMyPhoto,
+                      child: Stack(
+                        children: [
+                          ProfileAvatar(
+                            name: caregiver.name,
+                            photoUrl: caregiver.photoUrl,
+                            radius: 30,
+                          ),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: CircleAvatar(
+                              radius: 12,
+                              backgroundColor: AppTheme.primaryColor,
+                              child: _uploadingPhoto
+                                  ? const SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.photo_camera_rounded,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -69,6 +98,14 @@ class _CaregiverProfileScreenState
                               color: AppTheme.textSecondary,
                             ),
                           ),
+                          if (caregiver.relationship.isNotEmpty &&
+                              caregiver.relationship != 'Caregiver')
+                            Text(
+                              caregiver.relationship,
+                              style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
                           if (caregiver.phone.isNotEmpty) ...[
                             const SizedBox(height: 4),
                             Text(
@@ -80,6 +117,14 @@ class _CaregiverProfileScreenState
                             ),
                           ],
                         ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Edit my profile',
+                      onPressed: () => _editMyProfile(caregiver),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        color: AppTheme.primaryColor,
                       ),
                     ),
                   ],
@@ -104,9 +149,11 @@ class _CaregiverProfileScreenState
               ),
               child: hasPatient
                   ? ListTile(
-                      leading: const Icon(
-                        Icons.badge_rounded,
-                        color: AppTheme.primaryColor,
+                      onTap: () => context.push('/caregiver/patient-profile'),
+                      leading: ProfileAvatar(
+                        name: patient.name,
+                        photoUrl: patient.photoUrl,
+                        radius: 22,
                       ),
                       title: Text(
                         patient.name,
@@ -115,10 +162,7 @@ class _CaregiverProfileScreenState
                       subtitle: Text(
                         'Age: ${patient.age} • Status: ${patient.isDeviceOnline ? "Device Online" : "Offline"}',
                       ),
-                      trailing: const Icon(
-                        Icons.check_circle,
-                        color: AppTheme.successGreen,
-                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
                     )
                   : ListTile(
                       leading: const Icon(
@@ -268,30 +312,152 @@ class _CaregiverProfileScreenState
             ),
             const SizedBox(height: 24),
 
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.alertRed,
-                side: const BorderSide(color: AppTheme.alertRed),
-                minimumSize: const Size(double.infinity, 52),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () async {
-                await ref.read(sessionProvider.notifier).signOut();
-                if (context.mounted) context.go('/login');
-              },
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text(
-                'Sign Out',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ),
+            const AccountSettingsSection(),
             const SizedBox(height: 32),
           ],
         ),
       ),
     );
+  }
+
+  bool _uploadingPhoto = false;
+
+  Future<void> _changeMyPhoto() async {
+    final fromCamera = await askPhotoSource(context);
+    if (fromCamera == null || !mounted) return;
+    setState(() => _uploadingPhoto = true);
+    try {
+      final bytes = await pickSquarePhoto(fromCamera: fromCamera);
+      if (bytes == null) return;
+      if (ref.read(careRepositoryProvider) == null) {
+        throw const FormatException(
+          'Photos can be saved when the app is connected to Supabase.',
+        );
+      }
+      await ref.read(currentCaregiverProvider.notifier).uploadPhoto(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Photo updated')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is FormatException ? error.message : readableAuthError(error),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
+  Future<void> _editMyProfile(CaregiverModel caregiver) async {
+    final formKey = GlobalKey<FormState>();
+    final name = TextEditingController(text: caregiver.name);
+    final phone = TextEditingController(text: caregiver.phone);
+    final relationship = TextEditingController(
+      text: caregiver.relationship == 'Caregiver' ? '' : caregiver.relationship,
+    );
+    var saving = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
+          title: const Text('Edit my profile'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: name,
+                    enabled: !saving,
+                    textCapitalization: TextCapitalization.words,
+                    maxLength: 120,
+                    decoration: const InputDecoration(labelText: 'Full name'),
+                    validator: (value) => (value?.trim().isEmpty ?? true)
+                        ? 'Enter your name'
+                        : null,
+                  ),
+                  TextFormField(
+                    controller: phone,
+                    enabled: !saving,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 30,
+                    decoration: const InputDecoration(labelText: 'Phone'),
+                    validator: (value) {
+                      final text = value?.trim() ?? '';
+                      if (text.isEmpty) return null;
+                      return RegExp(r'^\+?[0-9 ()-]{6,20}$').hasMatch(text)
+                          ? null
+                          : 'Enter a valid phone number';
+                    },
+                  ),
+                  TextFormField(
+                    controller: relationship,
+                    enabled: !saving,
+                    textCapitalization: TextCapitalization.sentences,
+                    maxLength: 80,
+                    decoration: const InputDecoration(
+                      labelText: 'Relationship to the patient',
+                      hintText: 'Daughter, son, spouse, nurse',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (!(formKey.currentState?.validate() ?? false)) return;
+                      setDialogState(() => saving = true);
+                      try {
+                        await ref
+                            .read(currentCaregiverProvider.notifier)
+                            .updateProfile(
+                              name: name.text,
+                              phone: phone.text,
+                              relationship: relationship.text,
+                            );
+                        if (dialogContext.mounted) {
+                          Navigator.of(dialogContext).pop();
+                        }
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Profile saved')),
+                          );
+                        }
+                      } catch (error) {
+                        setDialogState(() => saving = false);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(readableAuthError(error))),
+                          );
+                        }
+                      }
+                    },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    name.dispose();
+    phone.dispose();
+    relationship.dispose();
   }
 
   Future<void> _showContactDialog(

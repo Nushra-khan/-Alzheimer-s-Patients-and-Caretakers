@@ -3,7 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
+import '../../../core/location/location_permission.dart';
 import '../../../core/providers/app_state.dart';
+import '../../profile/account_settings_section.dart';
+import '../../profile/profile_avatar.dart';
 
 class PatientSettingsScreen extends ConsumerWidget {
   const PatientSettingsScreen({super.key});
@@ -29,17 +32,10 @@ class PatientSettingsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(20.0),
                 child: Row(
                   children: [
-                    CircleAvatar(
+                    ProfileAvatar(
+                      name: patient.name,
+                      photoUrl: patient.photoUrl,
                       radius: 32,
-                      backgroundColor: AppTheme.primaryContainer,
-                      child: Text(
-                        patient.name.characters.first,
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryColor,
-                        ),
-                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -54,7 +50,7 @@ class PatientSettingsScreen extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            'Age: ${patient.age} • Patient ID: ${patient.id}',
+                            'Age: ${patient.age}',
                             style: const TextStyle(
                               color: AppTheme.textSecondary,
                             ),
@@ -111,6 +107,49 @@ class PatientSettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(
+                      Icons.person_rounded,
+                      color: AppTheme.primaryColor,
+                    ),
+                    title: const Text(
+                      'My profile',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: const Text('Photo, allergies, medical details'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => context.push('/patient/profile-details'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.medical_information_rounded,
+                      color: AppTheme.alertRed,
+                    ),
+                    title: const Text(
+                      'Medical ID',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: const Text('Show this to someone helping you'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => context.push('/patient/medical-id'),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 24),
 
             // Location Sharing Toggle Section
@@ -138,7 +177,31 @@ class PatientSettingsScreen extends ConsumerWidget {
                   'Share location',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
+                subtitle: const Text(
+                  'Your caregiver can see where you are. A notification '
+                  'shows while sharing is on.',
+                ),
                 onChanged: (val) async {
+                  if (val) {
+                    final access = await requestLocationAccess();
+                    final help = locationAccessHelp(access);
+                    if (help != null) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          SnackBar(
+                            content: Text(help.message),
+                            duration: const Duration(seconds: 8),
+                            action: SnackBarAction(
+                              label: 'Open settings',
+                              onPressed: () => help.openSettings(),
+                            ),
+                          ),
+                        );
+                      return;
+                    }
+                  }
                   try {
                     await ref
                         .read(patientProvider.notifier)
@@ -239,26 +302,7 @@ class PatientSettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
-            // Sign Out / Exit
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.alertRed,
-                side: const BorderSide(color: AppTheme.alertRed),
-                minimumSize: const Size(double.infinity, 52),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () async {
-                await ref.read(sessionProvider.notifier).signOut();
-                if (context.mounted) context.go('/login');
-              },
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text(
-                'Sign Out',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ),
+            const AccountSettingsSection(),
             const SizedBox(height: 32),
           ],
         ),

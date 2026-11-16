@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../app/theme.dart';
 import '../../../core/providers/app_state.dart';
@@ -67,6 +68,10 @@ class _SosScreenState extends ConsumerState<SosScreen> {
       );
       return;
     }
+
+    // Send a fresh location right away so caregivers can find the patient.
+    final tracker = ref.read(locationTrackerProvider);
+    if (tracker != null) unawaited(tracker.sendNow());
 
     if (!mounted) return;
     setState(() {
@@ -306,7 +311,27 @@ class _SosScreenState extends ConsumerState<SosScreen> {
                 ),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 28),
+
+              // Medical ID for a stranger or paramedic who is helping.
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.alertRed,
+                  side: const BorderSide(color: AppTheme.alertRed, width: 2),
+                  minimumSize: const Size(double.infinity, 60),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: () => context.push('/patient/medical-id'),
+                icon: const Icon(Icons.medical_information_rounded, size: 28),
+                label: const Text(
+                  'Show my Medical ID',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+                ),
+              ),
+
+              const SizedBox(height: 28),
 
               // Emergency Direct Phone Call Section
               const Text(

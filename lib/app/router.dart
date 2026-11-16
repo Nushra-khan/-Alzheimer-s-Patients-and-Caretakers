@@ -19,6 +19,8 @@ import '../features/caregiver/location/location_screen.dart';
 import '../features/caregiver/alerts/alerts_screen.dart';
 import '../features/caregiver/schedules/schedules_screen.dart';
 import '../features/caregiver/profile/caregiver_profile_screen.dart';
+import '../features/profile/medical_id_screen.dart';
+import '../features/profile/patient_profile_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final session = ref.watch(sessionProvider);
@@ -86,6 +88,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/loading',
         builder: (context, state) => const LoadingScreen(),
+      ),
+      // Full-screen pages opened on top of the tabs, so Back returns there.
+      GoRoute(
+        path: '/patient/profile-details',
+        builder: (context, state) => const PatientProfileScreen(),
+      ),
+      GoRoute(
+        path: '/patient/medical-id',
+        builder: (context, state) => const MedicalIdScreen(),
+      ),
+      GoRoute(
+        path: '/caregiver/patient-profile',
+        builder: (context, state) =>
+            const PatientProfileScreen(caregiverView: true),
       ),
       GoRoute(
         path: '/choose-role',

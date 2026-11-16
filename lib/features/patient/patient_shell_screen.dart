@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../core/providers/app_state.dart';
+import '../profile/profile_avatar.dart';
 import '../auth/auth_service.dart';
 
 class PatientShellScreen extends ConsumerWidget {
@@ -23,6 +24,8 @@ class PatientShellScreen extends ConsumerWidget {
     final patient = ref.watch(patientProvider);
     final careData = ref.watch(careBootstrapProvider);
     ref.watch(careRealtimeProvider);
+    // Keeps location sharing running while the patient is signed in.
+    ref.watch(locationTrackerProvider);
     final selectedIndex = _selectedIndex(context);
 
     // Android Back: return to Today from other tabs; exit only from Today.
@@ -37,16 +40,25 @@ class PatientShellScreen extends ConsumerWidget {
           titleSpacing: 18,
           title: Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  'assets/branding/memora_app_icon.png',
-                  width: 42,
-                  height: 42,
-                  fit: BoxFit.cover,
-                  semanticLabel: 'Memora',
+              // The patient's own photo helps them recognise their app;
+              // the Memora icon is used until a photo is added.
+              if (patient.photoUrl.isNotEmpty)
+                ProfileAvatar(
+                  name: patient.name,
+                  photoUrl: patient.photoUrl,
+                  radius: 21,
+                )
+              else
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    'assets/branding/memora_app_icon.png',
+                    width: 42,
+                    height: 42,
+                    fit: BoxFit.cover,
+                    semanticLabel: 'Memora',
+                  ),
                 ),
-              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
