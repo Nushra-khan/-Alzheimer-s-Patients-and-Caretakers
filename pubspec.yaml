@@ -41,6 +41,12 @@ dependencies:
   supabase_flutter: ^2.17.2
   url_launcher: ^6.3.2
   google_sign_in: ^7.2.0
+  geolocator: ^14.0.2
+  battery_plus: ^7.0.0
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+  image_picker: ^1.1.2
+  image: ^4.3.0
 
 dev_dependencies:
   flutter_test:
@@ -66,8 +72,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/branding/memora_app_icon.png
-    - assets/branding/memora_duck_foreground.png
+    - assets/branding/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
