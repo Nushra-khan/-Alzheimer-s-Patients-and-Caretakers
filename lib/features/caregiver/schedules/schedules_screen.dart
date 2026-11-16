@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/app_state.dart';
+import '../../auth/auth_service.dart';
 
 enum _MedicationAction { edit, deactivate }
 
@@ -13,7 +14,8 @@ class SchedulesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final medications = ref.watch(doseInstancesProvider);
+    final medications = ref.watch(medicationsProvider);
+    final todayDoses = ref.watch(doseInstancesProvider);
     final routines = ref.watch(routinesProvider);
 
     return Scaffold(
@@ -59,9 +61,19 @@ class SchedulesScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
 
-              // Medication Items List
-              ...medications.map(
-                (med) => Card(
+              // Active medications (not just today's doses), so one that
+              // starts tomorrow can still be edited or stopped.
+              if (medications.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'No medications yet. Tap Add to create one.',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
+                ),
+              ...medications.map((med) {
+                final badge = _medicationBadge(med, todayDoses);
+                return Card(
                   margin: const EdgeInsets.only(bottom: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
@@ -69,17 +81,17 @@ class SchedulesScreen extends ConsumerWidget {
                   elevation: 2,
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(18),
-                    leading: CircleAvatar(
+                    leading: const CircleAvatar(
                       backgroundColor: AppTheme.primaryContainer,
                       radius: 26,
-                      child: const Icon(
+                      child: Icon(
                         Icons.medication_rounded,
                         color: AppTheme.primaryColor,
                         size: 26,
                       ),
                     ),
                     title: Text(
-                      med.medicineName,
+                      med.name,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -90,20 +102,23 @@ class SchedulesScreen extends ConsumerWidget {
                       children: [
                         const SizedBox(height: 4),
                         Text(
-                          '${med.dosage} • ${TimeOfDay.fromDateTime(med.scheduledFor).format(context)}',
+                          '${med.dosage} • Daily at '
+                          '${_formatTime(context, med.hour, med.minute)}',
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          med.instructions,
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 13,
+                        if (med.instructions.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            med.instructions,
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 13,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                     trailing: Row(
@@ -115,20 +130,20 @@ class SchedulesScreen extends ConsumerWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: _doseStatusBackground(med.status),
+                            color: badge.background,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            _doseStatusLabel(med.status),
+                            badge.label,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: _doseStatusColor(med.status),
+                              color: badge.color,
                             ),
                           ),
                         ),
                         PopupMenuButton<_MedicationAction>(
-                          tooltip: 'Medication options for ${med.medicineName}',
+                          tooltip: 'Medication options for ${med.name}',
                           onSelected: (action) {
                             switch (action) {
                               case _MedicationAction.edit:
@@ -175,8 +190,8 @@ class SchedulesScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                ),
-              ),
+                );
+              }),
 
               const SizedBox(height: 28),
 
@@ -291,9 +306,12 @@ class SchedulesScreen extends ConsumerWidget {
     final descriptionController = TextEditingController(
       text: routine?.subtitle ?? '',
     );
-    final timeController = TextEditingController(
-      text: routine?.time ?? '08:00 AM',
-    );
+    final existingTime = routine == null
+        ? null
+        : _parseScheduledTime(routine.time);
+    var routineTime = existingTime == null
+        ? const TimeOfDay(hour: 8, minute: 0)
+        : TimeOfDay.fromDateTime(existingTime);
     var isSaving = false;
 
     await showDialog<void>(
@@ -329,13 +347,12 @@ class SchedulesScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: timeController,
+                _TimeField(
+                  label: 'Reminder time',
+                  time: routineTime,
                   enabled: !isSaving,
-                  decoration: const InputDecoration(
-                    labelText: 'Reminder time',
-                    hintText: '08:00 AM',
-                  ),
+                  onChanged: (value) =>
+                      setDialogState(() => routineTime = value),
                 ),
               ],
             ),
@@ -352,9 +369,7 @@ class SchedulesScreen extends ConsumerWidget {
                   ? null
                   : () async {
                       final title = titleController.text.trim();
-                      final scheduledFor = _parseScheduledTime(
-                        timeController.text,
-                      );
+                      final scheduledFor = _nextOccurrence(routineTime);
                       if (title.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -363,15 +378,6 @@ class SchedulesScreen extends ConsumerWidget {
                         );
                         return;
                       }
-                      if (scheduledFor == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Enter a valid reminder time.'),
-                          ),
-                        );
-                        return;
-                      }
-
                       setDialogState(() => isSaving = true);
                       final displayTime = TimeOfDay.fromDateTime(
                         scheduledFor,
@@ -444,7 +450,6 @@ class SchedulesScreen extends ConsumerWidget {
 
     titleController.dispose();
     descriptionController.dispose();
-    timeController.dispose();
   }
 
   Future<void> _confirmRoutineDeactivation(
@@ -493,13 +498,14 @@ class SchedulesScreen extends ConsumerWidget {
   Future<void> _showEditMedicationDialog(
     BuildContext context,
     WidgetRef ref,
-    DoseInstance medication,
+    MedicationModel medication,
   ) async {
-    final nameController = TextEditingController(text: medication.medicineName);
+    final nameController = TextEditingController(text: medication.name);
     final dosageController = TextEditingController(text: medication.dosage);
     final instructionsController = TextEditingController(
       text: medication.instructions,
     );
+    var time = TimeOfDay(hour: medication.hour, minute: medication.minute);
     var isSaving = false;
 
     await showDialog<void>(
@@ -527,6 +533,13 @@ class SchedulesScreen extends ConsumerWidget {
                   decoration: const InputDecoration(labelText: 'Dosage'),
                 ),
                 const SizedBox(height: 12),
+                _TimeField(
+                  label: 'Daily time',
+                  time: time,
+                  enabled: !isSaving,
+                  onChanged: (value) => setDialogState(() => time = value),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: instructionsController,
                   enabled: !isSaving,
@@ -549,6 +562,7 @@ class SchedulesScreen extends ConsumerWidget {
                   : () async {
                       final name = nameController.text.trim();
                       final dosage = dosageController.text.trim();
+                      final instructions = instructionsController.text.trim();
                       if (name.isEmpty || dosage.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -557,31 +571,62 @@ class SchedulesScreen extends ConsumerWidget {
                         );
                         return;
                       }
+                      final patientId = ref.read(patientProvider).id;
+                      final detailsChanged =
+                          name != medication.name ||
+                          dosage != medication.dosage ||
+                          instructions != medication.instructions;
+                      final timeChanged =
+                          time.hour != medication.hour ||
+                          time.minute != medication.minute;
                       setDialogState(() => isSaving = true);
                       try {
-                        await ref
-                            .read(doseInstancesProvider.notifier)
-                            .updateMedicationDetails(
-                              patientId: ref.read(patientProvider).id,
-                              medicationId: medication.medicationId,
-                              medicineName: name,
-                              dosage: dosage,
-                              instructions: instructionsController.text,
-                            );
+                        if (detailsChanged) {
+                          await ref
+                              .read(doseInstancesProvider.notifier)
+                              .updateMedicationDetails(
+                                patientId: patientId,
+                                medicationId: medication.id,
+                                medicineName: name,
+                                dosage: dosage,
+                                instructions: instructions,
+                              );
+                          ref
+                              .read(medicationsProvider.notifier)
+                              .updateDetails(
+                                medicationId: medication.id,
+                                name: name,
+                                dosage: dosage,
+                                instructions: instructions,
+                              );
+                        }
+                        if (timeChanged) {
+                          await ref
+                              .read(medicationsProvider.notifier)
+                              .updateTime(
+                                patientId: patientId,
+                                medicationId: medication.id,
+                                hour: time.hour,
+                                minute: time.minute,
+                              );
+                          ref
+                              .read(doseInstancesProvider.notifier)
+                              .moveTodayDose(
+                                medication.id,
+                                time.hour,
+                                time.minute,
+                              );
+                        }
                         if (!dialogContext.mounted) return;
                         Navigator.of(dialogContext).pop();
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('$name updated.')),
                         );
-                      } catch (_) {
+                      } catch (error) {
                         if (!dialogContext.mounted) return;
                         setDialogState(() => isSaving = false);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Unable to update medication. Please try again.',
-                            ),
-                          ),
+                          SnackBar(content: Text(readableAuthError(error))),
                         );
                       }
                     },
@@ -609,14 +654,15 @@ class SchedulesScreen extends ConsumerWidget {
   Future<void> _confirmMedicationDeactivation(
     BuildContext context,
     WidgetRef ref,
-    DoseInstance medication,
+    MedicationModel medication,
   ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Stop this medication?'),
         content: Text(
-          '${medication.medicineName} will be removed from the active schedule. Past dose records will be kept.',
+          '${medication.name} will be removed from the active schedule. '
+          'Past dose records will be kept.',
         ),
         actions: [
           TextButton(
@@ -638,121 +684,220 @@ class SchedulesScreen extends ConsumerWidget {
           .read(doseInstancesProvider.notifier)
           .deactivateMedication(
             patientId: ref.read(patientProvider).id,
-            medicationId: medication.medicationId,
+            medicationId: medication.id,
           );
+      ref.read(medicationsProvider.notifier).remove(medication.id);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${medication.medicineName} is no longer active.'),
-        ),
+        SnackBar(content: Text('${medication.name} is no longer active.')),
       );
-    } catch (_) {
+    } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to stop medication. Please try again.'),
-        ),
+        SnackBar(content: Text(readableAuthError(error))),
       );
     }
   }
 
-  void _showAddMedicationDialog(BuildContext context, WidgetRef ref) {
+  Future<void> _showAddMedicationDialog(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final nameCtrl = TextEditingController();
     final dosageCtrl = TextEditingController();
-    final timeCtrl = TextEditingController(text: '09:00 AM');
     final instCtrl = TextEditingController();
+    var time = const TimeOfDay(hour: 9, minute: 0);
+    var isSaving = false;
 
-    showDialog(
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Add medication'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Medicine',
-                  hintText: 'Donepezil',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: dosageCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Dosage',
-                  hintText: '10mg - 1 tablet',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: timeCtrl,
-                decoration: const InputDecoration(labelText: 'Time'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: instCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Instructions',
-                  hintText: 'Take with water after food',
-                ),
-              ),
-            ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryColor,
-              foregroundColor: Colors.white,
+          title: const Text('Add medication'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  enabled: !isSaving,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Medicine',
+                    hintText: 'Donepezil',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: dosageCtrl,
+                  enabled: !isSaving,
+                  decoration: const InputDecoration(
+                    labelText: 'Dosage',
+                    hintText: '10mg - 1 tablet',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _TimeField(
+                  label: 'Daily time',
+                  time: time,
+                  enabled: !isSaving,
+                  onChanged: (value) => setDialogState(() => time = value),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: instCtrl,
+                  enabled: !isSaving,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Instructions',
+                    hintText: 'Take with water after food',
+                  ),
+                ),
+              ],
             ),
-            onPressed: () async {
-              if (nameCtrl.text.isNotEmpty) {
-                final scheduledFor = _parseScheduledTime(timeCtrl.text);
-                if (scheduledFor == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter a valid time')),
-                  );
-                  return;
-                }
-                final newMed = DoseInstance(
-                  id: 'dose-${DateTime.now().millisecondsSinceEpoch}',
-                  medicationId: 'med-${DateTime.now().millisecondsSinceEpoch}',
-                  medicineName: nameCtrl.text,
-                  dosage: dosageCtrl.text.isEmpty ? '1 Dose' : dosageCtrl.text,
-                  instructions: instCtrl.text.isEmpty
-                      ? 'As directed'
-                      : instCtrl.text,
-                  scheduledFor: scheduledFor,
-                  status: DoseStatus.scheduled,
-                );
-                try {
-                  await ref
-                      .read(doseInstancesProvider.notifier)
-                      .addDose(newMed, patientId: ref.read(patientProvider).id);
-                  if (!context.mounted) return;
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${nameCtrl.text} added')),
-                  );
-                } catch (_) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Unable to add medication')),
-                  );
-                }
-              }
-            },
-            child: const Text('Save'),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: isSaving
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final name = nameCtrl.text.trim();
+                      final dosage = dosageCtrl.text.trim();
+                      if (name.isEmpty || dosage.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Medicine and dosage are required.'),
+                          ),
+                        );
+                        return;
+                      }
+                      final scheduledFor = _nextOccurrence(time);
+                      final stamp = DateTime.now().millisecondsSinceEpoch;
+                      setDialogState(() => isSaving = true);
+                      try {
+                        final saved = await ref
+                            .read(doseInstancesProvider.notifier)
+                            .addDose(
+                              DoseInstance(
+                                id: 'dose-$stamp',
+                                medicationId: 'med-$stamp',
+                                medicineName: name,
+                                dosage: dosage,
+                                instructions: instCtrl.text.trim(),
+                                scheduledFor: scheduledFor,
+                                status: DoseStatus.scheduled,
+                              ),
+                              patientId: ref.read(patientProvider).id,
+                            );
+                        ref
+                            .read(medicationsProvider.notifier)
+                            .add(
+                              MedicationModel(
+                                id: saved.medicationId,
+                                name: name,
+                                dosage: dosage,
+                                instructions: instCtrl.text.trim(),
+                                hour: time.hour,
+                                minute: time.minute,
+                                startsOn: DateTime(
+                                  scheduledFor.year,
+                                  scheduledFor.month,
+                                  scheduledFor.day,
+                                ),
+                              ),
+                            );
+                        if (!dialogContext.mounted) return;
+                        Navigator.of(dialogContext).pop();
+                        final startsToday =
+                            scheduledFor.day == DateTime.now().day;
+                        final timeLabel = time.format(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              startsToday
+                                  ? '$name added. First dose today at '
+                                        '$timeLabel.'
+                                  : '$timeLabel has passed today, so the '
+                                        'first dose of $name is tomorrow.',
+                            ),
+                          ),
+                        );
+                      } catch (error) {
+                        if (!dialogContext.mounted) return;
+                        setDialogState(() => isSaving = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(readableAuthError(error))),
+                        );
+                      }
+                    },
+              child: isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Save'),
+            ),
+          ],
+        ),
       ),
+    );
+
+    nameCtrl.dispose();
+    dosageCtrl.dispose();
+    instCtrl.dispose();
+  }
+
+  /// Today at [time], or tomorrow if that time has already passed.
+  DateTime _nextOccurrence(TimeOfDay time) {
+    final now = DateTime.now();
+    final atTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+    return atTime.isBefore(now) ? atTime.add(const Duration(days: 1)) : atTime;
+  }
+
+  String _formatTime(BuildContext context, int hour, int minute) =>
+      TimeOfDay(hour: hour, minute: minute).format(context);
+
+  /// What to show next to a medication: today's dose status, or when its
+  /// first dose is due.
+  _Badge _medicationBadge(MedicationModel med, List<DoseInstance> todayDoses) {
+    final dose = todayDoses.where((d) => d.medicationId == med.id).firstOrNull;
+    if (dose != null) {
+      return _Badge(
+        _doseStatusLabel(dose.status),
+        _doseStatusColor(dose.status),
+        _doseStatusBackground(dose.status),
+      );
+    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final startsOn = DateTime(
+      med.startsOn.year,
+      med.startsOn.month,
+      med.startsOn.day,
+    );
+    return _Badge(
+      startsOn.isAfter(today) ? 'STARTS TOMORROW' : 'NO DOSE TODAY',
+      AppTheme.primaryColor,
+      AppTheme.primaryContainer,
     );
   }
 
@@ -797,3 +942,51 @@ Color _doseStatusBackground(DoseStatus status) => switch (status) {
   DoseStatus.overdue => Colors.red.shade100,
   DoseStatus.scheduled => Colors.orange.shade100,
 };
+
+class _Badge {
+  const _Badge(this.label, this.color, this.background);
+
+  final String label;
+  final Color color;
+  final Color background;
+}
+
+/// Shows a time and opens the system time picker when tapped.
+class _TimeField extends StatelessWidget {
+  const _TimeField({
+    required this.label,
+    required this.time,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String label;
+  final TimeOfDay time;
+  final bool enabled;
+  final ValueChanged<TimeOfDay> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: !enabled
+          ? null
+          : () async {
+              final picked = await showTimePicker(
+                context: context,
+                initialTime: time,
+                helpText: label,
+              );
+              if (picked != null) onChanged(picked);
+            },
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          suffixIcon: const Icon(Icons.access_time_rounded),
+          enabled: enabled,
+        ),
+        child: Text(time.format(context)),
+      ),
+    );
+  }
+}

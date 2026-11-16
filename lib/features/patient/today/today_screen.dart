@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/app_state.dart';
+import '../../auth/auth_service.dart';
 
 class TodayScreen extends ConsumerWidget {
   const TodayScreen({super.key});
@@ -169,10 +170,10 @@ class TodayScreen extends ConsumerWidget {
                               backgroundColor: AppTheme.successGreen,
                             ),
                           );
-                        } catch (_) {
+                        } catch (error) {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Unable to update')),
+                            SnackBar(content: Text(readableAuthError(error))),
                           );
                         }
                       },
@@ -188,10 +189,10 @@ class TodayScreen extends ConsumerWidget {
                               content: Text('Dose returned to pending'),
                             ),
                           );
-                        } catch (_) {
+                        } catch (error) {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Unable to update')),
+                            SnackBar(content: Text(readableAuthError(error))),
                           );
                         }
                       },
@@ -231,10 +232,10 @@ class TodayScreen extends ConsumerWidget {
                         await ref
                             .read(routinesProvider.notifier)
                             .toggleRoutine(routine.id);
-                      } catch (_) {
+                      } catch (error) {
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Unable to update')),
+                          SnackBar(content: Text(readableAuthError(error))),
                         );
                       }
                     },
@@ -293,11 +294,11 @@ class TodayScreen extends ConsumerWidget {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Dose recorded as skipped')));
-    } catch (_) {
+    } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Unable to update')));
+      ).showSnackBar(SnackBar(content: Text(readableAuthError(error))));
     }
   }
 }
