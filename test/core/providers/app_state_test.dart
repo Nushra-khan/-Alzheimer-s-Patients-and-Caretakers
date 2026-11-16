@@ -239,21 +239,81 @@ void main() {
     expect(notifier.state.radiusMeters, 450);
   });
 
-  test('a medication can be added to local state', () async {
+  test('a medication due today is added to today\'s doses', () async {
     final notifier = DoseInstanceNotifier();
+    final now = DateTime.now();
     final dose = DoseInstance(
       id: 'new-dose',
       medicationId: 'new-medication',
       medicineName: 'Test medicine',
       dosage: '1 tablet',
       instructions: 'After food',
-      scheduledFor: DateTime(2026, 10, 8, 20),
+      scheduledFor: DateTime(now.year, now.month, now.day, 23, 59),
       status: DoseStatus.scheduled,
     );
 
-    await notifier.addDose(dose, patientId: 'patient-1');
+    final saved = await notifier.addDose(dose, patientId: 'patient-1');
 
-    expect(notifier.state.last.id, dose.id);
+    expect(saved.id, dose.id);
+    expect(notifier.state.any((item) => item.id == dose.id), isTrue);
+  });
+
+  test('a medication starting tomorrow is not in today\'s doses', () async {
+    final notifier = DoseInstanceNotifier();
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final dose = DoseInstance(
+      id: 'tomorrow-dose',
+      medicationId: 'tomorrow-medication',
+      medicineName: 'Test medicine',
+      dosage: '1 tablet',
+      instructions: '',
+      scheduledFor: DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 9),
+      status: DoseStatus.scheduled,
+    );
+
+    final saved = await notifier.addDose(dose, patientId: 'patient-1');
+
+    expect(saved.medicationId, 'tomorrow-medication');
+    expect(notifier.state.any((item) => item.id == dose.id), isFalse);
+  });
+
+  test('medications list keeps medicines sorted and editable', () {
+    final notifier = MedicationsNotifier();
+    final today = DateTime.now();
+    notifier.add(
+      MedicationModel(
+        id: 'evening',
+        name: 'Evening tablet',
+        dosage: '1 tablet',
+        instructions: '',
+        hour: 20,
+        minute: 0,
+        startsOn: today,
+      ),
+    );
+    notifier.add(
+      MedicationModel(
+        id: 'morning',
+        name: 'Morning tablet',
+        dosage: '1 tablet',
+        instructions: '',
+        hour: 8,
+        minute: 30,
+        startsOn: today,
+      ),
+    );
+    expect(notifier.state.map((m) => m.id), ['morning', 'evening']);
+
+    notifier.updateDetails(
+      medicationId: 'evening',
+      name: 'Night tablet',
+      dosage: '2 tablets',
+      instructions: 'With milk',
+    );
+    expect(notifier.state.last.name, 'Night tablet');
+
+    notifier.remove('morning');
+    expect(notifier.state.map((m) => m.id), ['evening']);
   });
 
   test('deactivating a medication removes all of its active doses', () async {
@@ -380,6 +440,18 @@ class _FailingOptionalCareRepository implements CareRepository {
 
   @override
   Future<SafeZoneModel?> loadSafeZone(String patientId) =>
+      Future.error(StateError('Temporary backend failure'));
+
+  @override
+  Future<PatientDetails> loadPatientDetails(String patientId) =>
+      Future.error(StateError('Temporary backend failure'));
+
+  @override
+  Future<List<MedicationModel>> loadMedications(String patientId) =>
+      Future.error(StateError('Temporary backend failure'));
+
+  @override
+  Future<LocationStatus> loadLocationStatus(String patientId) =>
       Future.error(StateError('Temporary backend failure'));
 
   @override

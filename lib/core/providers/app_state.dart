@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/auth/auth_service.dart';
 import '../config/app_config.dart';
+import '../location/location_tracker.dart';
 import '../models/models.dart';
 import '../repositories/care_repository.dart';
 import '../repositories/supabase_care_repository.dart';
@@ -96,6 +98,17 @@ class SessionNotifier extends StateNotifier<AppSession> {
   }
 
   Future<void> signInWithGoogle() => _configuredAuth.signInWithGoogle();
+
+  bool get isEmailAccount => _authService?.isEmailAccount ?? false;
+
+  Future<void> changePassword(String newPassword) =>
+      _configuredAuth.changePassword(newPassword);
+
+  /// Deletes the account on the server, then signs out on this phone.
+  Future<void> deleteAccount() async {
+    await _configuredAuth.deleteAccount();
+    state = const AppSession.signedOut();
+  }
 
   Future<void> resendConfirmation(String email) =>
       _configuredAuth.resendConfirmation(email);
@@ -338,17 +351,51 @@ class DoseInstanceNotifier extends StateNotifier<List<DoseInstance>> {
     }).toList();
   }
 
-  Future<void> addDose(DoseInstance dose, {required String patientId}) async {
-    final persisted = await _repository?.createMedicationSchedule(
-      patientId: patientId,
-      medicineName: dose.medicineName,
-      dosage: dose.dosage,
-      instructions: dose.instructions,
-      scheduledFor: dose.scheduledFor,
-      timezone: AppConfig.careTimezone,
-      idempotencyKey: 'schedule:${dose.id}',
-    );
-    state = [...state, persisted ?? dose];
+  /// Creates a daily medication. Returns the saved first dose. It is added
+  /// to today's list only when it falls on today.
+  Future<DoseInstance> addDose(
+    DoseInstance dose, {
+    required String patientId,
+  }) async {
+    final persisted =
+        await _repository?.createMedicationSchedule(
+          patientId: patientId,
+          medicineName: dose.medicineName,
+          dosage: dose.dosage,
+          instructions: dose.instructions,
+          scheduledFor: dose.scheduledFor,
+          timezone: AppConfig.careTimezone,
+          idempotencyKey: 'schedule:${dose.id}',
+        ) ??
+        dose;
+    if (_isToday(persisted.scheduledFor)) {
+      state = [...state, persisted]
+        ..sort((a, b) => a.scheduledFor.compareTo(b.scheduledFor));
+    }
+    return persisted;
+  }
+
+  /// Moves today's pending dose of a medication to a new time.
+  void moveTodayDose(String medicationId, int hour, int minute) {
+    state =
+        state.map((dose) {
+          if (dose.medicationId != medicationId || !dose.isPending) {
+            return dose;
+          }
+          final at = dose.scheduledFor;
+          return dose.copyWith(
+            scheduledFor: DateTime(at.year, at.month, at.day, hour, minute),
+            status: DoseStatus.scheduled,
+          );
+        }).toList()
+        ..sort((a, b) => a.scheduledFor.compareTo(b.scheduledFor));
+  }
+
+  static bool _isToday(DateTime time) {
+    final now = DateTime.now();
+    return time.year == now.year &&
+        time.month == now.month &&
+        time.day == now.day;
   }
 
   Future<void> deactivateMedication({
@@ -391,6 +438,100 @@ final doseInstancesProvider =
     StateNotifierProvider<DoseInstanceNotifier, List<DoseInstance>>((ref) {
       ref.watch(sessionProvider);
       return DoseInstanceNotifier(ref.watch(careRepositoryProvider));
+    });
+
+/// The patient's active medications, whether or not a dose is due today.
+/// The caregiver's Schedule tab lists these, so a medication that starts
+/// tomorrow can still be edited or stopped.
+class MedicationsNotifier extends StateNotifier<List<MedicationModel>> {
+  MedicationsNotifier({
+    List<MedicationModel> initial = const [],
+    this._repository,
+  }) : super(initial);
+
+  final CareRepository? _repository;
+
+  void replace(List<MedicationModel> medications) =>
+      state = _sorted(medications);
+
+  void add(MedicationModel medication) => state = _sorted([
+    ...state.where((m) => m.id != medication.id),
+    medication,
+  ]);
+
+  void remove(String medicationId) =>
+      state = state.where((m) => m.id != medicationId).toList();
+
+  void updateDetails({
+    required String medicationId,
+    required String name,
+    required String dosage,
+    required String instructions,
+  }) {
+    state = state
+        .map(
+          (m) => m.id == medicationId
+              ? m.copyWith(
+                  name: name.trim(),
+                  dosage: dosage.trim(),
+                  instructions: instructions.trim(),
+                )
+              : m,
+        )
+        .toList();
+  }
+
+  Future<void> updateTime({
+    required String patientId,
+    required String medicationId,
+    required int hour,
+    required int minute,
+  }) async {
+    await _repository?.updateMedicationTime(
+      patientId: patientId,
+      medicationId: medicationId,
+      hour: hour,
+      minute: minute,
+      timezone: AppConfig.careTimezone,
+    );
+    state = _sorted(
+      state
+          .map(
+            (m) => m.id == medicationId
+                ? m.copyWith(hour: hour, minute: minute)
+                : m,
+          )
+          .toList(),
+    );
+  }
+
+  static List<MedicationModel> _sorted(List<MedicationModel> list) =>
+      [...list]..sort((a, b) => a.minutesOfDay.compareTo(b.minutesOfDay));
+}
+
+final medicationsProvider =
+    StateNotifierProvider<MedicationsNotifier, List<MedicationModel>>((ref) {
+      ref.watch(sessionProvider);
+      final repository = ref.watch(careRepositoryProvider);
+      if (repository != null) {
+        return MedicationsNotifier(repository: repository);
+      }
+      // Demo mode: one medication per demo dose.
+      final today = DateTime.now();
+      return MedicationsNotifier(
+        initial: [
+          for (final dose in DoseInstanceNotifier().state)
+            MedicationModel(
+              id: dose.medicationId,
+              name: dose.medicineName,
+              dosage: dose.dosage,
+              instructions: dose.instructions,
+              hour: dose.scheduledFor.hour,
+              minute: dose.scheduledFor.minute,
+              startsOn: DateTime(today.year, today.month, today.day),
+            ),
+        ],
+      );
     });
 
 // Routine Items Provider
@@ -709,7 +850,18 @@ final careBootstrapProvider = FutureProvider<CareBootstrapStatus>((ref) async {
       repository.loadEmergencyContacts(patientId),
       ref.read(emergencyContactsProvider),
     ),
-    _withFallback<SafeZoneModel?>(repository.loadSafeZone(patientId), null),
+    _withFallback<LocationStatus?>(
+      repository.loadLocationStatus(patientId),
+      null,
+    ),
+    _withFallback<List<MedicationModel>>(
+      repository.loadMedications(patientId),
+      ref.read(medicationsProvider),
+    ),
+    _withFallback<PatientDetails?>(
+      repository.loadPatientDetails(patientId),
+      ref.read(patientDetailsProvider),
+    ),
   ]);
   ref.read(patientProvider.notifier).replace(values[0] as PatientModel);
   ref
@@ -723,9 +875,14 @@ final careBootstrapProvider = FutureProvider<CareBootstrapStatus>((ref) async {
   ref
       .read(emergencyContactsProvider.notifier)
       .replace(values[5] as List<EmergencyContact>);
-  final safeZone = values[6] as SafeZoneModel?;
-  if (safeZone != null) {
-    ref.read(safeZoneProvider.notifier).replace(safeZone);
+  final locationStatus = values[6] as LocationStatus?;
+  if (locationStatus != null) _applyLocationStatus(ref, locationStatus);
+  ref
+      .read(medicationsProvider.notifier)
+      .replace(values[7] as List<MedicationModel>);
+  final details = values[8] as PatientDetails?;
+  if (details != null) {
+    ref.read(patientDetailsProvider.notifier).replace(details);
   }
   if (session.canAccessCaregiver) {
     final caregiver = await _withFallback<CaregiverModel?>(
@@ -737,6 +894,77 @@ final careBootstrapProvider = FutureProvider<CareBootstrapStatus>((ref) async {
     }
   }
   return CareBootstrapStatus.ready;
+});
+
+/// Copies the backend's location status into the patient, safe zone and
+/// map providers that the screens read.
+void _applyLocationStatus(Ref ref, LocationStatus status) {
+  final patientNotifier = ref.read(patientProvider.notifier);
+  final patient = ref.read(patientProvider);
+  final lastSeen = status.lastSeenAt;
+  final location = status.location;
+  patientNotifier.replace(
+    PatientModel(
+      id: patient.id,
+      profileId: patient.profileId,
+      name: patient.name,
+      dateOfBirth: patient.dateOfBirth,
+      photoUrl: patient.photoUrl,
+      batteryLevel: status.batteryLevel,
+      isDeviceOnline:
+          lastSeen != null && status.state != LocationState.offline,
+      locationSharingEnabled: status.sharingEnabled,
+      lastSyncTime: lastSeen,
+      safeZoneStatus: switch (status.state) {
+        LocationState.inside => SafeZoneStatus.inside,
+        LocationState.outside => SafeZoneStatus.outside,
+        LocationState.offline => SafeZoneStatus.offline,
+        LocationState.unknown ||
+        LocationState.sharingOff => SafeZoneStatus.unknown,
+      },
+      lastKnownLocationName: location == null
+          ? 'Location unavailable'
+          : 'Last location at ${_clockTime(location.observedAt)}',
+    ),
+  );
+  ref.read(patientLocationProvider.notifier).state = location;
+  ref
+      .read(safeZoneProvider.notifier)
+      .replace(status.safeZone ?? SafeZoneNotifier.emptyZone());
+}
+
+String _clockTime(DateTime time) {
+  final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
+  final minute = time.minute.toString().padLeft(2, '0');
+  return '$hour:$minute ${time.hour >= 12 ? 'PM' : 'AM'}';
+}
+
+/// The patient's last reported position, shown on the caregiver's map.
+final patientLocationProvider = StateProvider<PatientLocation?>((ref) {
+  ref.watch(sessionProvider);
+  return null;
+});
+
+/// Runs location tracking on the patient's phone while sharing is on.
+/// Watched by the patient shell, so it stops when the patient signs out.
+final locationTrackerProvider = Provider<LocationTracker?>((ref) {
+  final session = ref.watch(sessionProvider);
+  final repository = ref.watch(careRepositoryProvider);
+  final patientId = ref.watch(patientProvider.select((p) => p.id));
+  final sharing = ref.watch(
+    patientProvider.select((p) => p.locationSharingEnabled),
+  );
+  if (kIsWeb ||
+      !session.canAccessPatient ||
+      repository == null ||
+      patientId.isEmpty ||
+      !sharing) {
+    return null;
+  }
+  final tracker = LocationTracker(repository);
+  ref.onDispose(tracker.stop);
+  unawaited(tracker.startIfPermitted());
+  return tracker;
 });
 
 Future<void> refreshCareData(WidgetRef ref) async {
@@ -792,6 +1020,43 @@ class SafeZoneNotifier extends StateNotifier<SafeZoneModel> {
   final CareRepository? _repository;
 
   void replace(SafeZoneModel safeZone) => state = safeZone;
+
+  /// Placeholder used when the patient has no safe zone yet.
+  static SafeZoneModel emptyZone() => SafeZoneModel(
+    id: '',
+    name: 'Safe zone',
+    radiusMeters: 300,
+    centerLatitude: 0,
+    centerLongitude: 0,
+    isPatientInside: true,
+    lastChecked: DateTime.now(),
+  );
+
+  /// Creates or moves the safe zone. Earlier zones are switched off.
+  Future<void> saveZone({
+    required String patientId,
+    required String name,
+    required double latitude,
+    required double longitude,
+    required double radiusMeters,
+  }) async {
+    final id = await _repository?.saveSafeZone(
+      patientId: patientId,
+      name: name,
+      latitude: latitude,
+      longitude: longitude,
+      radiusMeters: radiusMeters.round(),
+    );
+    state = SafeZoneModel(
+      id: id ?? 'sz-${DateTime.now().millisecondsSinceEpoch}',
+      name: name.trim().isEmpty ? 'Home' : name.trim(),
+      radiusMeters: radiusMeters,
+      centerLatitude: latitude,
+      centerLongitude: longitude,
+      isPatientInside: state.isPatientInside,
+      lastChecked: DateTime.now(),
+    );
+  }
 
   Future<void> updateRadius(double newRadius) async {
     await _repository?.updateSafeZoneRadius(
@@ -871,7 +1136,7 @@ final caregiversProvider =
     });
 
 class CurrentCaregiverNotifier extends StateNotifier<CaregiverModel> {
-  CurrentCaregiverNotifier()
+  CurrentCaregiverNotifier([this._repository])
     : super(
         CaregiverModel(
           id: '',
@@ -883,13 +1148,124 @@ class CurrentCaregiverNotifier extends StateNotifier<CaregiverModel> {
         ),
       );
 
+  final CareRepository? _repository;
+
   void replace(CaregiverModel caregiver) => state = caregiver;
+
+  Future<void> updateProfile({
+    required String name,
+    required String phone,
+    required String relationship,
+  }) async {
+    await _repository?.updateCaregiverProfile(
+      name: name,
+      phone: phone,
+      relationship: relationship,
+    );
+    state = state.copyWith(
+      name: name.trim(),
+      phone: phone.trim(),
+      relationship: relationship.trim(),
+    );
+  }
+
+  Future<void> uploadPhoto(Uint8List jpegBytes) async {
+    final repository = _repository;
+    if (repository == null || state.profileId.isEmpty) return;
+    final url = await repository.uploadProfilePhoto(
+      profileId: state.profileId,
+      jpegBytes: jpegBytes,
+    );
+    state = state.copyWith(photoUrl: url);
+  }
 }
 
 final currentCaregiverProvider =
     StateNotifierProvider<CurrentCaregiverNotifier, CaregiverModel>((ref) {
       ref.watch(sessionProvider);
-      return CurrentCaregiverNotifier();
+      return CurrentCaregiverNotifier(ref.watch(careRepositoryProvider));
+    });
+
+/// The patient's full profile (medical and care details). Null until loaded.
+class PatientDetailsNotifier extends StateNotifier<PatientDetails?> {
+  PatientDetailsNotifier(super.initial, this._repository);
+
+  final CareRepository? _repository;
+
+  void replace(PatientDetails details) => state = details;
+
+  Future<void> save({
+    required String patientId,
+    required String fullName,
+    required DateTime? dateOfBirth,
+    required Map<String, String> fields,
+  }) async {
+    final cleaned = {
+      for (final entry in fields.entries)
+        if (entry.value.trim().isNotEmpty) entry.key: entry.value.trim(),
+    };
+    await _repository?.updatePatientDetails(
+      patientId: patientId,
+      fullName: fullName,
+      dateOfBirth: dateOfBirth,
+      fields: {
+        // Send every field, so cleared ones are removed on the server.
+        for (final key in PatientDetails.fieldKeys) key: cleaned[key] ?? '',
+      },
+    );
+    final current = state;
+    state = PatientDetails(
+      profileId: current?.profileId ?? '',
+      fullName: fullName.trim(),
+      dateOfBirth: dateOfBirth,
+      photoUrl: current?.photoUrl ?? '',
+      fields: cleaned,
+    );
+  }
+
+  Future<String> uploadPhoto(String profileId, Uint8List jpegBytes) async {
+    final repository = _repository;
+    if (repository == null) return state?.photoUrl ?? '';
+    final url = await repository.uploadProfilePhoto(
+      profileId: profileId,
+      jpegBytes: jpegBytes,
+    );
+    final current = state;
+    if (current != null) state = current.copyWith(photoUrl: url);
+    return url;
+  }
+}
+
+final patientDetailsProvider =
+    StateNotifierProvider<PatientDetailsNotifier, PatientDetails?>((ref) {
+      ref.watch(sessionProvider);
+      final repository = ref.watch(careRepositoryProvider);
+      if (repository != null) return PatientDetailsNotifier(null, repository);
+      // Demo mode: details matching the demo patient.
+      return PatientDetailsNotifier(
+        PatientDetails(
+          profileId: 'demo-patient',
+          fullName: 'Ramesh Sharma',
+          dateOfBirth: DateTime(1954, 1, 15),
+          photoUrl: '',
+          fields: const {
+            'preferred_name': 'Ramesh ji',
+            'gender': 'male',
+            'languages': 'Hindi, English',
+            'home_address': 'Vasant Vihar, New Delhi',
+            'blood_group': 'B+',
+            'food_allergies': 'Peanuts',
+            'medicine_allergies': 'Penicillin',
+            'medical_conditions': "Alzheimer's disease, high blood pressure",
+            'dementia_stage': 'middle',
+            'doctor_name': 'Dr. V. K. Gupta',
+            'doctor_phone': '+91 11 2614 0000',
+            'wandering_risk': 'medium',
+            'calming_things': 'Old Hindi songs, tea on the balcony',
+          },
+        ),
+        null,
+      );
     });
 
 class EmergencyContactsNotifier extends StateNotifier<List<EmergencyContact>> {

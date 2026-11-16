@@ -50,6 +50,9 @@ enum SafeZoneStatus { inside, outside, stale, offline, unknown }
 
 class PatientModel {
   final String id;
+
+  /// The patient's profile (auth user) ID; their photos live in this folder.
+  final String profileId;
   final String name;
   final DateTime dateOfBirth;
   final String photoUrl;
@@ -62,6 +65,7 @@ class PatientModel {
 
   PatientModel({
     required this.id,
+    this.profileId = '',
     required this.name,
     required this.dateOfBirth,
     required this.photoUrl,
@@ -75,6 +79,7 @@ class PatientModel {
 
   PatientModel copyWith({
     String? id,
+    String? profileId,
     String? name,
     DateTime? dateOfBirth,
     String? photoUrl,
@@ -87,6 +92,7 @@ class PatientModel {
   }) {
     return PatientModel(
       id: id ?? this.id,
+      profileId: profileId ?? this.profileId,
       name: name ?? this.name,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       photoUrl: photoUrl ?? this.photoUrl,
@@ -115,20 +121,42 @@ class PatientModel {
 
 class CaregiverModel {
   final String id;
+  final String profileId;
   final String name;
   final String relationship;
   final String phone;
   final String email;
   final bool isPrimary;
+  final String photoUrl;
 
   CaregiverModel({
     required this.id,
+    this.profileId = '',
     required this.name,
     required this.relationship,
     required this.phone,
     required this.email,
     required this.isPrimary,
+    this.photoUrl = '',
   });
+
+  CaregiverModel copyWith({
+    String? name,
+    String? relationship,
+    String? phone,
+    String? photoUrl,
+  }) {
+    return CaregiverModel(
+      id: id,
+      profileId: profileId,
+      name: name ?? this.name,
+      relationship: relationship ?? this.relationship,
+      phone: phone ?? this.phone,
+      email: email,
+      isPrimary: isPrimary,
+      photoUrl: photoUrl ?? this.photoUrl,
+    );
+  }
 }
 
 enum DoseStatus { scheduled, reportedTaken, skipped, overdue }
@@ -343,6 +371,166 @@ class EmergencyContact {
       phone: phone ?? this.phone,
       relationship: relationship ?? this.relationship,
       priority: priority ?? this.priority,
+    );
+  }
+}
+
+/// The patient's last reported position.
+class PatientLocation {
+  final double latitude;
+  final double longitude;
+  final double accuracyMeters;
+  final DateTime observedAt;
+
+  const PatientLocation({
+    required this.latitude,
+    required this.longitude,
+    required this.accuracyMeters,
+    required this.observedAt,
+  });
+}
+
+enum LocationState { inside, outside, offline, unknown, sharingOff }
+
+/// Everything the caregiver's map needs, computed by the backend.
+class LocationStatus {
+  final LocationState state;
+  final bool sharingEnabled;
+  final DateTime? lastSeenAt;
+  final int? batteryLevel;
+  final PatientLocation? location;
+  final SafeZoneModel? safeZone;
+
+  const LocationStatus({
+    required this.state,
+    required this.sharingEnabled,
+    required this.lastSeenAt,
+    required this.batteryLevel,
+    required this.location,
+    required this.safeZone,
+  });
+}
+
+/// An active medication and its daily time, independent of today's dose.
+class MedicationModel {
+  final String id;
+  final String name;
+  final String dosage;
+  final String instructions;
+  final int hour;
+  final int minute;
+
+  /// First day a dose is due (later than today when added after its time).
+  final DateTime startsOn;
+
+  const MedicationModel({
+    required this.id,
+    required this.name,
+    required this.dosage,
+    required this.instructions,
+    required this.hour,
+    required this.minute,
+    required this.startsOn,
+  });
+
+  MedicationModel copyWith({
+    String? name,
+    String? dosage,
+    String? instructions,
+    int? hour,
+    int? minute,
+  }) {
+    return MedicationModel(
+      id: id,
+      name: name ?? this.name,
+      dosage: dosage ?? this.dosage,
+      instructions: instructions ?? this.instructions,
+      hour: hour ?? this.hour,
+      minute: minute ?? this.minute,
+      startsOn: startsOn,
+    );
+  }
+
+  /// Minutes after midnight, for sorting by time of day.
+  int get minutesOfDay => hour * 60 + minute;
+}
+
+/// The patient's full profile: name, birth date, photo and the care details
+/// listed in [PatientDetails.fieldKeys], keyed by database column name.
+class PatientDetails {
+  final String profileId;
+  final String fullName;
+  final DateTime? dateOfBirth;
+  final String photoUrl;
+  final Map<String, String> fields;
+
+  const PatientDetails({
+    required this.profileId,
+    required this.fullName,
+    required this.dateOfBirth,
+    required this.photoUrl,
+    required this.fields,
+  });
+
+  static const fieldKeys = [
+    'preferred_name',
+    'gender',
+    'languages',
+    'home_address',
+    'blood_group',
+    'food_allergies',
+    'medicine_allergies',
+    'other_allergies',
+    'medical_conditions',
+    'dementia_stage',
+    'doctor_name',
+    'doctor_phone',
+    'preferred_hospital',
+    'medical_notes',
+    'mobility_aids',
+    'sensory_aids',
+    'diet_needs',
+    'wandering_risk',
+    'calming_things',
+    'upsetting_things',
+    'id_bracelet_number',
+  ];
+
+  String value(String key) => fields[key] ?? '';
+
+  /// Age in whole years, or null when the birth date is unknown.
+  int? get age {
+    final birth = dateOfBirth;
+    if (birth == null) return null;
+    final now = DateTime.now();
+    var years = now.year - birth.year;
+    if (now.month < birth.month ||
+        (now.month == birth.month && now.day < birth.day)) {
+      years--;
+    }
+    return years;
+  }
+
+  /// Every allergy in one line, for the Medical ID card.
+  String get allAllergies => [
+    value('food_allergies'),
+    value('medicine_allergies'),
+    value('other_allergies'),
+  ].where((text) => text.trim().isNotEmpty).join('; ');
+
+  PatientDetails copyWith({
+    String? fullName,
+    DateTime? dateOfBirth,
+    bool clearDateOfBirth = false,
+    String? photoUrl,
+    Map<String, String>? fields,
+  }) {
+    return PatientDetails(
+      profileId: profileId,
+      fullName: fullName ?? this.fullName,
+      dateOfBirth: clearDateOfBirth ? null : dateOfBirth ?? this.dateOfBirth,
+      photoUrl: photoUrl ?? this.photoUrl,
+      fields: fields ?? this.fields,
     );
   }
 }

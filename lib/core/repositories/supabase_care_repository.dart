@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -9,6 +10,20 @@ class SupabaseCareRepository implements CareRepository {
   SupabaseCareRepository(this._client);
 
   final SupabaseClient _client;
+
+  static const photoBucket = 'profile-photos';
+
+  /// A private photo link valid for one hour, or '' when there is none.
+  Future<String> _photoUrl(String? path) async {
+    if (path == null || path.isEmpty) return '';
+    try {
+      return await _client.storage
+          .from(photoBucket)
+          .createSignedUrl(path, 3600);
+    } catch (_) {
+      return '';
+    }
+  }
 
   @override
   Future<String> resolveAccessiblePatientId() async {
@@ -48,7 +63,7 @@ class SupabaseCareRepository implements CareRepository {
     }
     final profile = await _client
         .from('profiles')
-        .select('display_name')
+        .select('display_name, photo_path')
         .eq('id', patient['profile_id'] as String)
         .single();
 
@@ -67,10 +82,11 @@ class SupabaseCareRepository implements CareRepository {
 
     return PatientModel(
       id: patient['id'] as String,
+      profileId: patient['profile_id'] as String,
       name: profile['display_name'] as String? ?? 'Patient',
       dateOfBirth:
           DateTime.tryParse(patient['date_of_birth'] as String? ?? '') ?? now,
-      photoUrl: '',
+      photoUrl: await _photoUrl(profile['photo_path'] as String?),
       batteryLevel: null,
       isDeviceOnline:
           lastSeen != null && now.difference(lastSeen).inMinutes < 15,
@@ -180,6 +196,162 @@ class SupabaseCareRepository implements CareRepository {
   }
 
   @override
+  Future<PatientDetails> loadPatientDetails(String patientId) async {
+    final patient = await _client
+        .from('patients')
+        .select(
+          'profile_id, date_of_birth, ${PatientDetails.fieldKeys.join(', ')}',
+        )
+        .eq('id', patientId)
+        .single();
+    final profileId = patient['profile_id'] as String;
+    final profile = await _client
+        .from('profiles')
+        .select('display_name, photo_path')
+        .eq('id', profileId)
+        .single();
+    return PatientDetails(
+      profileId: profileId,
+      fullName: profile['display_name'] as String? ?? '',
+      dateOfBirth: DateTime.tryParse(
+        patient['date_of_birth'] as String? ?? '',
+      ),
+      photoUrl: await _photoUrl(profile['photo_path'] as String?),
+      fields: {
+        for (final key in PatientDetails.fieldKeys)
+          if ((patient[key] as String?)?.isNotEmpty ?? false)
+            key: patient[key] as String,
+      },
+    );
+  }
+
+  @override
+  Future<void> updatePatientDetails({
+    required String patientId,
+    required String fullName,
+    required DateTime? dateOfBirth,
+    required Map<String, String> fields,
+  }) => _client.rpc<void>(
+    'update_patient_profile',
+    params: {
+      'target_patient_id': patientId,
+      'details': {
+        ...fields,
+        'full_name': fullName.trim(),
+        'date_of_birth': dateOfBirth == null ? '' : _dateOnly(dateOfBirth),
+      },
+    },
+  );
+
+  @override
+  Future<String> uploadProfilePhoto({
+    required String profileId,
+    required Uint8List jpegBytes,
+  }) async {
+    final bucket = _client.storage.from(photoBucket);
+    final path = '$profileId/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    await bucket.uploadBinary(
+      path,
+      jpegBytes,
+      fileOptions: const FileOptions(contentType: 'image/jpeg'),
+    );
+    await _client.rpc<void>(
+      'set_profile_photo',
+      params: {'target_profile_id': profileId, 'new_photo_path': path},
+    );
+    // Remove older photos in the folder; failures here are harmless.
+    try {
+      final files = await bucket.list(path: profileId);
+      final old = [
+        for (final file in files)
+          if ('$profileId/${file.name}' != path) '$profileId/${file.name}',
+      ];
+      if (old.isNotEmpty) await bucket.remove(old);
+    } catch (_) {}
+    return _photoUrl(path);
+  }
+
+  @override
+  Future<void> updateCaregiverProfile({
+    required String name,
+    required String phone,
+    required String relationship,
+  }) => _client.rpc<void>(
+    'update_caregiver_profile',
+    params: {
+      'full_name': name.trim(),
+      'phone_number': phone.trim(),
+      'relationship_to_patient': relationship.trim(),
+    },
+  );
+
+  @override
+  Future<List<MedicationModel>> loadMedications(String patientId) async {
+    final medicationRows = await _client
+        .from('medications')
+        .select('id, name, dosage, instructions')
+        .eq('patient_id', patientId)
+        .eq('active', true);
+    if (medicationRows.isEmpty) return const [];
+    final scheduleRows = await _client
+        .from('medication_schedules')
+        .select('medication_id, local_time, starts_on, created_at')
+        .inFilter(
+          'medication_id',
+          medicationRows.map((row) => row['id'] as String).toList(),
+        )
+        .eq('active', true)
+        .order('created_at', ascending: false);
+    final scheduleByMedication = <String, Map<String, dynamic>>{};
+    for (final row in scheduleRows) {
+      scheduleByMedication.putIfAbsent(
+        row['medication_id'] as String,
+        () => row,
+      );
+    }
+    final medications = <MedicationModel>[];
+    for (final row in medicationRows) {
+      final schedule = scheduleByMedication[row['id'] as String];
+      if (schedule == null) continue;
+      final time = (schedule['local_time'] as String? ?? '09:00').split(':');
+      medications.add(
+        MedicationModel(
+          id: row['id'] as String,
+          name: row['name'] as String? ?? 'Medication',
+          dosage: row['dosage'] as String? ?? '',
+          instructions: row['instructions'] as String? ?? '',
+          hour: int.tryParse(time.first) ?? 9,
+          minute: time.length > 1 ? int.tryParse(time[1]) ?? 0 : 0,
+          startsOn:
+              DateTime.tryParse(schedule['starts_on'] as String? ?? '') ??
+              DateTime.now(),
+        ),
+      );
+    }
+    medications.sort((a, b) => a.minutesOfDay.compareTo(b.minutesOfDay));
+    return medications;
+  }
+
+  @override
+  Future<void> updateMedicationTime({
+    required String patientId,
+    required String medicationId,
+    required int hour,
+    required int minute,
+    required String timezone,
+  }) => _client.rpc<void>(
+    'update_medication_time',
+    params: {
+      'target_patient_id': patientId,
+      'target_medication_id': medicationId,
+      'target_local_time':
+          '${hour.toString().padLeft(2, '0')}:'
+          '${minute.toString().padLeft(2, '0')}:00',
+      'target_timezone': timezone,
+    },
+  );
+
+  @override
   Future<List<AlertModel>> loadAlerts(String patientId) async {
     final patientName = await _patientName(patientId);
     final rows = await _client
@@ -260,29 +432,33 @@ class SupabaseCareRepository implements CareRepository {
         .toList();
     final caregivers = await _client
         .from('caregivers')
-        .select('id, profile_id')
+        .select('id, profile_id, relationship')
         .inFilter('id', caregiverIds);
     final profileIds = caregivers
         .map((row) => row['profile_id'] as String)
         .toList();
     final profiles = await _client
         .from('profiles')
-        .select('id, display_name, phone')
+        .select('id, display_name, phone, photo_path')
         .inFilter('id', profileIds);
     final profileById = <String, Map<String, dynamic>>{
       for (final row in profiles) row['id'] as String: row,
     };
-    return caregivers.map((row) {
-      final profile = profileById[row['profile_id'] as String];
-      return CaregiverModel(
-        id: row['id'] as String,
-        name: profile?['display_name'] as String? ?? 'Caregiver',
-        relationship: 'Caregiver',
-        phone: profile?['phone'] as String? ?? '',
-        email: '',
-        isPrimary: false,
-      );
-    }).toList();
+    return Future.wait(
+      caregivers.map((row) async {
+        final profile = profileById[row['profile_id'] as String];
+        return CaregiverModel(
+          id: row['id'] as String,
+          profileId: row['profile_id'] as String,
+          name: profile?['display_name'] as String? ?? 'Caregiver',
+          relationship: row['relationship'] as String? ?? 'Caregiver',
+          phone: profile?['phone'] as String? ?? '',
+          email: '',
+          isPrimary: false,
+          photoUrl: await _photoUrl(profile?['photo_path'] as String?),
+        );
+      }),
+    );
   }
 
   @override
@@ -293,21 +469,23 @@ class SupabaseCareRepository implements CareRepository {
     }
     final caregiver = await _client
         .from('caregivers')
-        .select('id, profile_id')
+        .select('id, profile_id, relationship')
         .eq('profile_id', user.id)
         .single();
     final profile = await _client
         .from('profiles')
-        .select('display_name, phone')
+        .select('display_name, phone, photo_path')
         .eq('id', user.id)
         .single();
     return CaregiverModel(
       id: caregiver['id'] as String,
+      profileId: user.id,
       name: profile['display_name'] as String? ?? 'Caregiver',
-      relationship: 'Caregiver',
+      relationship: caregiver['relationship'] as String? ?? '',
       phone: profile['phone'] as String? ?? '',
       email: user.email ?? '',
       isPrimary: false,
+      photoUrl: await _photoUrl(profile['photo_path'] as String?),
     );
   }
 
@@ -386,37 +564,95 @@ class SupabaseCareRepository implements CareRepository {
       );
 
   @override
-  Future<SafeZoneModel?> loadSafeZone(String patientId) async {
-    final row = await _client
-        .from('safe_zones')
-        .select('id, name, radius_meters, center, updated_at')
-        .eq('patient_id', patientId)
-        .eq('active', true)
-        .limit(1)
-        .maybeSingle();
-    if (row == null) return null;
-    final coordinates = _coordinates(row['center']);
-    final transitionRows = await _client
-        .from('safe_zone_transitions')
-        .select('transition, occurred_at')
-        .eq('safe_zone_id', row['id'] as String)
-        .order('occurred_at', ascending: false)
-        .limit(1);
-    final latestTransition = transitionRows.isEmpty
-        ? null
-        : transitionRows.first['transition'] as String?;
-    return SafeZoneModel(
-      id: row['id'] as String,
-      name: row['name'] as String,
-      radiusMeters: (row['radius_meters'] as num).toDouble(),
-      centerLatitude: coordinates.$2,
-      centerLongitude: coordinates.$1,
-      isPatientInside: latestTransition != 'exited',
-      lastChecked:
-          DateTime.tryParse(row['updated_at'] as String? ?? '')?.toLocal() ??
-          DateTime.now(),
+  Future<SafeZoneModel?> loadSafeZone(String patientId) async =>
+      (await loadLocationStatus(patientId)).safeZone;
+
+  @override
+  Future<LocationStatus> loadLocationStatus(String patientId) async {
+    final result = await _client.rpc<Map<String, dynamic>>(
+      'get_location_status',
+      params: {'target_patient_id': patientId},
+    );
+    final state = switch (result['status'] as String?) {
+      'inside' => LocationState.inside,
+      'outside' => LocationState.outside,
+      'offline' => LocationState.offline,
+      'sharing_off' => LocationState.sharingOff,
+      _ => LocationState.unknown,
+    };
+    final location = result['location'] as Map<String, dynamic>?;
+    final zone = result['safe_zone'] as Map<String, dynamic>?;
+    return LocationStatus(
+      state: state,
+      sharingEnabled: result['sharing_enabled'] as bool? ?? false,
+      lastSeenAt: _parseTime(result['last_seen_at']),
+      batteryLevel: (result['battery_level'] as num?)?.toInt(),
+      location: location == null
+          ? null
+          : PatientLocation(
+              latitude: (location['latitude'] as num).toDouble(),
+              longitude: (location['longitude'] as num).toDouble(),
+              accuracyMeters:
+                  (location['accuracy_meters'] as num?)?.toDouble() ?? 0,
+              observedAt: _parseTime(location['observed_at']) ?? DateTime.now(),
+            ),
+      safeZone: zone == null
+          ? null
+          : SafeZoneModel(
+              id: zone['id'] as String,
+              name: zone['name'] as String? ?? 'Safe zone',
+              radiusMeters: (zone['radius_meters'] as num).toDouble(),
+              centerLatitude: (zone['latitude'] as num).toDouble(),
+              centerLongitude: (zone['longitude'] as num).toDouble(),
+              isPatientInside: state != LocationState.outside,
+              lastChecked: _parseTime(zone['updated_at']) ?? DateTime.now(),
+            ),
     );
   }
+
+  @override
+  Future<String> saveSafeZone({
+    required String patientId,
+    required String name,
+    required double latitude,
+    required double longitude,
+    required int radiusMeters,
+  }) => _client.rpc<String>(
+    'save_safe_zone',
+    params: {
+      'target_patient_id': patientId,
+      'zone_name': name.trim(),
+      'target_latitude': latitude,
+      'target_longitude': longitude,
+      'target_radius_meters': radiusMeters,
+    },
+  );
+
+  @override
+  Future<int> recordLocation({
+    required double latitude,
+    required double longitude,
+    required double accuracyMeters,
+    required DateTime observedAt,
+    required int? batteryLevel,
+    required String idempotencyKey,
+  }) async {
+    final result = await _client.rpc<Map<String, dynamic>>(
+      'record_location',
+      params: {
+        'target_latitude': latitude,
+        'target_longitude': longitude,
+        'target_accuracy_meters': accuracyMeters,
+        'target_observed_at': observedAt.toUtc().toIso8601String(),
+        'target_battery_level': batteryLevel,
+        'request_idempotency_key': idempotencyKey,
+      },
+    );
+    return (result['next_update_seconds'] as num?)?.toInt() ?? 300;
+  }
+
+  static DateTime? _parseTime(Object? value) =>
+      value is String ? DateTime.tryParse(value)?.toLocal() : null;
 
   @override
   Future<({String token, DateTime expiresAt})> createCareInvitation() async {
@@ -653,6 +889,9 @@ class SupabaseCareRepository implements CareRepository {
           'safe_zones',
           'care_relationships',
           'emergency_contacts',
+          'location_observations',
+          'safe_zone_transitions',
+          'medications',
         ]) {
           channel = watchPatientTable(channel, table);
         }
@@ -787,17 +1026,4 @@ class SupabaseCareRepository implements CareRepository {
   static String _databaseTime(DateTime value) =>
       '${value.hour.toString().padLeft(2, '0')}:'
       '${value.minute.toString().padLeft(2, '0')}:00';
-
-  static (double, double) _coordinates(Object? value) {
-    if (value is Map<String, dynamic>) {
-      final coordinates = value['coordinates'];
-      if (coordinates is List && coordinates.length >= 2) {
-        return (
-          (coordinates[0] as num).toDouble(),
-          (coordinates[1] as num).toDouble(),
-        );
-      }
-    }
-    return (0, 0);
-  }
 }

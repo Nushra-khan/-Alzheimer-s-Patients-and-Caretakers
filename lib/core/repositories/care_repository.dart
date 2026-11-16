@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../models/models.dart';
 
 class NoPatientConnectionException implements Exception {
@@ -68,6 +70,38 @@ abstract interface class CareRepository {
     required String idempotencyKey,
   });
 
+  Future<List<MedicationModel>> loadMedications(String patientId);
+
+  Future<PatientDetails> loadPatientDetails(String patientId);
+
+  Future<void> updatePatientDetails({
+    required String patientId,
+    required String fullName,
+    required DateTime? dateOfBirth,
+    required Map<String, String> fields,
+  });
+
+  /// Uploads a square JPEG as the photo of [profileId] (the user's own
+  /// profile, or their patient's). Returns a short-lived URL to show it.
+  Future<String> uploadProfilePhoto({
+    required String profileId,
+    required Uint8List jpegBytes,
+  });
+
+  Future<void> updateCaregiverProfile({
+    required String name,
+    required String phone,
+    required String relationship,
+  });
+
+  Future<void> updateMedicationTime({
+    required String patientId,
+    required String medicationId,
+    required int hour,
+    required int minute,
+    required String timezone,
+  });
+
   Future<void> deactivateMedication({
     required String patientId,
     required String medicationId,
@@ -114,6 +148,27 @@ abstract interface class CareRepository {
   Future<void> updateSafeZoneRadius({
     required String safeZoneId,
     required double radiusMeters,
+  });
+
+  Future<String> saveSafeZone({
+    required String patientId,
+    required String name,
+    required double latitude,
+    required double longitude,
+    required int radiusMeters,
+  });
+
+  Future<LocationStatus> loadLocationStatus(String patientId);
+
+  /// Sends the patient's position. Returns how many seconds to wait before
+  /// the next update.
+  Future<int> recordLocation({
+    required double latitude,
+    required double longitude,
+    required double accuracyMeters,
+    required DateTime observedAt,
+    required int? batteryLevel,
+    required String idempotencyKey,
   });
 
   Stream<PatientModel> watchPatient(String patientId);
