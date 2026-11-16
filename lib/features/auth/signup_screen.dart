@@ -7,6 +7,7 @@ import '../../core/models/models.dart';
 import '../../core/providers/app_state.dart';
 import 'auth_background.dart';
 import 'auth_service.dart';
+import 'google_sign_in_button.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -267,29 +268,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             ],
                           ),
                           const SizedBox(height: 22),
-                          OutlinedButton(
+                          GoogleSignInButton(
+                            label: 'Sign up with Google',
                             onPressed: _isLoading ? null : _continueWithGoogle,
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'G',
-                                  style: TextStyle(
-                                    color: Color(0xFF4285F4),
-                                    fontSize: 19,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                SizedBox(width: 12),
-                                Flexible(
-                                  child: Text(
-                                    'Sign up with Google',
-                                    overflow: TextOverflow.fade,
-                                    softWrap: false,
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
                           const SizedBox(height: 16),
                           Wrap(

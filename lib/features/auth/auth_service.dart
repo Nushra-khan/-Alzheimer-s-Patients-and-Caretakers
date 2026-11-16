@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart'
     show
@@ -53,12 +55,14 @@ class AuthService {
     required String password,
     required UserRole role,
   }) async {
-    final response = await _client.auth.signUp(
-      email: email.trim(),
-      password: password,
-      data: {'display_name': displayName.trim(), 'role': role.name},
-      // The confirmation link in the email opens the app and signs in.
-      emailRedirectTo: kIsWeb ? _webRedirectUrl : googleCallbackUrl,
+    final response = await _withTimeout(
+      _client.auth.signUp(
+        email: email.trim(),
+        password: password,
+        data: {'display_name': displayName.trim(), 'role': role.name},
+        // The confirmation link in the email opens the app and signs in.
+        emailRedirectTo: kIsWeb ? _webRedirectUrl : googleCallbackUrl,
+      ),
     );
 
     // With email confirmation on, Supabase hides whether an address is
@@ -105,11 +109,18 @@ class AuthService {
         scopeHint: const ['email', 'profile'],
       );
     } on GoogleSignInException catch (error) {
-      // Closing the account picker is not an error worth showing.
-      if (error.code == GoogleSignInExceptionCode.canceled) return;
-      throw AuthException(
-        error.description ?? 'Google sign-in failed. Please try again.',
-      );
+      final description = error.description ?? '';
+      debugPrint('Google sign-in failed: ${error.code} $description');
+      // Android also reports setup problems (wrong SHA-1, package name or
+      // client ID) as "canceled", so only stay quiet when the person really
+      // closed the account picker.
+      final closedByUser =
+          error.code == GoogleSignInExceptionCode.canceled &&
+          (description.isEmpty ||
+              description.toLowerCase().contains('cancel')) &&
+          !_looksLikeGoogleSetupProblem(description);
+      if (closedByUser) return;
+      throw AuthException(_googleErrorMessage(error.code, description));
     }
 
     final idToken = account.authentication.idToken;
@@ -127,11 +138,12 @@ class AuthService {
     );
   }
 
-  Future<void> sendPasswordReset(String email) =>
-      _client.auth.resetPasswordForEmail(
-        email.trim(),
-        redirectTo: kIsWeb ? _webRedirectUrl : passwordRecoveryCallbackUrl,
-      );
+  Future<void> sendPasswordReset(String email) => _withTimeout(
+    _client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: kIsWeb ? _webRedirectUrl : passwordRecoveryCallbackUrl,
+    ),
+  );
 
   Future<void> updatePassword(String password) async {
     if (_client.auth.currentSession == null) {
@@ -140,6 +152,39 @@ class AuthService {
       );
     }
     await _client.auth.updateUser(UserAttributes(password: password));
+  }
+
+  static bool _looksLikeGoogleSetupProblem(String description) {
+    final text = description.toLowerCase();
+    return text.contains('developer console') ||
+        text.contains('28444') ||
+        text.contains('developer_error') ||
+        text.contains('not set up') ||
+        text.contains('misconfigured') ||
+        text.contains('client id');
+  }
+
+  static String _googleErrorMessage(
+    GoogleSignInExceptionCode code,
+    String description,
+  ) {
+    if (code == GoogleSignInExceptionCode.clientConfigurationError ||
+        code == GoogleSignInExceptionCode.providerConfigurationError ||
+        _looksLikeGoogleSetupProblem(description)) {
+      return 'Google sign-in is not set up for this version of the app. '
+          'Check the Android OAuth client (package name and SHA-1) in '
+          'Google Cloud.';
+    }
+    return switch (code) {
+      GoogleSignInExceptionCode.interrupted =>
+        'Google sign-in was interrupted. Please try again.',
+      GoogleSignInExceptionCode.uiUnavailable =>
+        'Google sign-in could not open. Please try again.',
+      _ =>
+        description.isEmpty
+            ? 'Google sign-in did not finish. Please try again.'
+            : 'Google sign-in failed: $description',
+    };
   }
 
   /// The role chosen at sign-up, for use when the database cannot be reached.
@@ -190,11 +235,65 @@ class AuthService {
         : UserRole.caregiver;
   }
 
-  Future<void> resendConfirmation(String email) => _client.auth.resend(
-    type: OtpType.signup,
-    email: email.trim(),
-    emailRedirectTo: kIsWeb ? _webRedirectUrl : googleCallbackUrl,
+  Future<void> resendConfirmation(String email) => _withTimeout(
+    _client.auth.resend(
+      type: OtpType.signup,
+      email: email.trim(),
+      emailRedirectTo: kIsWeb ? _webRedirectUrl : googleCallbackUrl,
+    ),
   );
+
+  /// Requests that send an email wait on the mail server; never let the
+  /// spinner run forever when it is slow or broken.
+  static Future<T> _withTimeout<T>(Future<T> request) => request.timeout(
+    const Duration(seconds: 30),
+    onTimeout: () => throw const AuthException(
+      'The server took too long to respond. Check your internet and try '
+      'again.',
+      code: 'request_timeout',
+    ),
+  );
+
+  /// True for accounts that sign in with email and password (Google
+  /// accounts have no Memora password to change).
+  bool get isEmailAccount {
+    final metadata = _client.auth.currentUser?.appMetadata ?? const {};
+    final providers = metadata['providers'];
+    if (providers is List) return providers.contains('email');
+    return metadata['provider'] == 'email';
+  }
+
+  Future<void> changePassword(String newPassword) => _withTimeout(
+    _client.auth.updateUser(UserAttributes(password: newPassword)),
+  );
+
+  /// Permanently deletes the signed-in account. Photos are removed from
+  /// storage first, because Supabase does not allow deleting them from SQL.
+  /// Returns the deleted role ('patient', 'caregiver' or 'unassigned').
+  Future<String> deleteAccount() async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in again to delete your account.');
+    }
+    try {
+      final bucket = _client.storage.from('profile-photos');
+      final files = await bucket.list(path: user.id);
+      if (files.isNotEmpty) {
+        await bucket.remove([
+          for (final file in files) '${user.id}/${file.name}',
+        ]);
+      }
+    } catch (error) {
+      // A leftover photo must not block deletion; it is unreachable once
+      // the account is gone.
+      debugPrint('Photo cleanup before deletion failed: $error');
+    }
+    final role = await _withTimeout(
+      _client.rpc<String>('delete_my_account'),
+    );
+    await signOut();
+    return role;
+  }
 
   Future<void> signOut() async {
     try {
@@ -216,6 +315,23 @@ class AuthService {
 }
 
 String readableAuthError(Object error) {
+  final message = _readableAuthError(error);
+  // While testing (debug builds only), show the technical details too, so
+  // problems can be traced. Release builds show the friendly text alone.
+  if (!kDebugMode) return message;
+  final detail = switch (error) {
+    AuthException(:final code, :final statusCode, message: final raw) =>
+      '${code ?? statusCode ?? 'auth'}: $raw',
+    PostgrestException(:final code, message: final raw) =>
+      '${code ?? 'db'}: $raw',
+    _ => error.toString(),
+  };
+  return detail.trim().isEmpty || message.contains(detail)
+      ? message
+      : '$message\n[$detail]';
+}
+
+String _readableAuthError(Object error) {
   if (error is AuthException) {
     final String? message = switch (error.code) {
       'invalid_credentials' => 'Wrong email or password.',
@@ -230,6 +346,12 @@ String readableAuthError(Object error) {
         'Too many emails were sent. Wait a few minutes and try again.',
       'over_request_rate_limit' =>
         'Too many attempts. Wait a minute and try again.',
+      'reauthentication_needed' =>
+        'For your security, sign out and sign in again, then change your '
+            'password.',
+      'request_timeout' =>
+        'The server took too long to respond. Check your internet and try '
+            'again.',
       'signup_disabled' => 'New sign-ups are turned off right now.',
       'otp_expired' ||
       'flow_state_expired' ||
@@ -238,6 +360,14 @@ String readableAuthError(Object error) {
       _ => null,
     };
     if (message != null) return message;
+    final lower = error.message.toLowerCase();
+    if (lower.contains('sending') && lower.contains('email')) {
+      return "We couldn't send the email. The app's email settings need "
+          'checking. Please try again later.';
+    }
+    if (lower.contains('rate limit')) {
+      return 'Too many emails were sent. Wait a while and try again.';
+    }
     if (error is AuthRetryableFetchException) return _offlineMessage;
     if (error.message.contains('Invalid login credentials')) {
       return 'Wrong email or password.';
