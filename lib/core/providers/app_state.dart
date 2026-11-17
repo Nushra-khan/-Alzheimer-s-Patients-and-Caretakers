@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -148,20 +147,46 @@ class SessionNotifier extends StateNotifier<AppSession> {
       // the account; RLS still decides what data the user can load.
       debugPrint('Unable to confirm account role: $error');
       final role = _configuredAuth.roleFromAccountMetadata;
-      state = role == null
-          ? const AppSession.signedOut()
-          : AppSession.authenticated(role);
+      if (role == null) {
+        state = const AppSession.signedOut();
+      } else {
+        _applyRole(role);
+      }
     }
   }
 
+  int _generation = 0;
+
+  String? get _currentUserId => _authService?.currentUserId;
+
+  /// Starts a fresh session after an explicit sign-in. Always clears care
+  /// data left from whoever used the app before.
   void establishAuthenticatedSession(UserRole role) {
-    state = AppSession.authenticated(role);
+    state = AppSession.authenticated(
+      role,
+      userId: _currentUserId,
+      generation: ++_generation,
+    );
   }
 
+  /// Applies a role found when re-checking the session. Keeps the current
+  /// session (and its loaded data) when it is the same person and role, so
+  /// routine token refreshes do not reload everything.
   void _applyRole(UserRole? role) {
+    final userId = _currentUserId;
+    if (state.isAuthenticated &&
+        state.role == role &&
+        state.userId == userId) {
+      return;
+    }
+    _generation++;
     state = role == null
-        ? const AppSession.needsRole()
-        : AppSession.authenticated(role);
+        ? AppSession.needsRole(userId: userId, generation: _generation)
+        : AppSession.authenticated(
+            role,
+            userId: userId,
+            generation: _generation,
+          );
   }
 
   /// Completes setup for an account that signed in without a role.
@@ -269,42 +294,41 @@ DateTime _todayAt(int hour, [int minute = 0]) {
   return DateTime(now.year, now.month, now.day, hour, minute);
 }
 
+/// Sample doses shown when the app runs without Supabase (demo mode).
+List<DoseInstance> _demoDoses() => [
+  DoseInstance(
+    id: 'dose-1',
+    medicationId: 'med-1',
+    medicineName: 'Donepezil',
+    dosage: '10 mg • 1 Tablet',
+    instructions: 'Take with evening meal',
+    scheduledFor: _todayAt(20),
+    status: DoseStatus.scheduled,
+  ),
+  DoseInstance(
+    id: 'dose-2',
+    medicationId: 'med-2',
+    medicineName: 'Memantine HCl',
+    dosage: '5 mg • 1 Tablet',
+    instructions: 'Take with morning breakfast',
+    scheduledFor: _todayAt(9),
+    status: DoseStatus.reportedTaken,
+    reportedAt: _todayAt(9, 5),
+  ),
+  DoseInstance(
+    id: 'dose-3',
+    medicationId: 'med-3',
+    medicineName: 'Vitamin B12 & D3',
+    dosage: '1 Capsule',
+    instructions: 'After lunch with glass of water',
+    scheduledFor: _todayAt(14),
+    status: DoseStatus.scheduled,
+  ),
+];
+
 class DoseInstanceNotifier extends StateNotifier<List<DoseInstance>> {
   DoseInstanceNotifier([this._repository])
-    : super(
-        _repository == null
-            ? [
-                DoseInstance(
-                  id: 'dose-1',
-                  medicationId: 'med-1',
-                  medicineName: 'Donepezil',
-                  dosage: '10 mg • 1 Tablet',
-                  instructions: 'Take with evening meal',
-                  scheduledFor: _todayAt(20),
-                  status: DoseStatus.scheduled,
-                ),
-                DoseInstance(
-                  id: 'dose-2',
-                  medicationId: 'med-2',
-                  medicineName: 'Memantine HCl',
-                  dosage: '5 mg • 1 Tablet',
-                  instructions: 'Take with morning breakfast',
-                  scheduledFor: _todayAt(9),
-                  status: DoseStatus.reportedTaken,
-                  reportedAt: _todayAt(9, 5),
-                ),
-                DoseInstance(
-                  id: 'dose-3',
-                  medicationId: 'med-3',
-                  medicineName: 'Vitamin B12 & D3',
-                  dosage: '1 Capsule',
-                  instructions: 'After lunch with glass of water',
-                  scheduledFor: _todayAt(14),
-                  status: DoseStatus.scheduled,
-                ),
-              ]
-            : const [],
-      );
+    : super(_repository == null ? _demoDoses() : const []);
 
   final CareRepository? _repository;
 
@@ -520,7 +544,7 @@ final medicationsProvider =
       final today = DateTime.now();
       return MedicationsNotifier(
         initial: [
-          for (final dose in DoseInstanceNotifier().state)
+          for (final dose in _demoDoses())
             MedicationModel(
               id: dose.medicationId,
               name: dose.medicineName,

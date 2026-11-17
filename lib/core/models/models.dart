@@ -7,10 +7,19 @@ class AppSession {
   /// True while a saved sign-in is being checked at app start.
   final bool isRestoring;
 
+  /// The signed-in account, when known.
+  final String? userId;
+
+  /// Changes on every new sign-in, so care data from the previous person is
+  /// always cleared, even when the role is the same.
+  final int generation;
+
   const AppSession._({
     required this.role,
     required this.isAuthenticated,
     this.isRestoring = false,
+    this.userId,
+    this.generation = 0,
   });
 
   const AppSession.signedOut() : this._(role: null, isAuthenticated: false);
@@ -18,12 +27,26 @@ class AppSession {
   const AppSession.restoring()
     : this._(role: null, isAuthenticated: false, isRestoring: true);
 
-  const AppSession.authenticated(UserRole role)
-    : this._(role: role, isAuthenticated: true);
+  const AppSession.authenticated(
+    UserRole role, {
+    String? userId,
+    int generation = 0,
+  }) : this._(
+         role: role,
+         isAuthenticated: true,
+         userId: userId,
+         generation: generation,
+       );
 
   /// Signed in, but the account has not chosen patient or caregiver yet
   /// (for example, a first sign-in with Google).
-  const AppSession.needsRole() : this._(role: null, isAuthenticated: true);
+  const AppSession.needsRole({String? userId, int generation = 0})
+    : this._(
+        role: null,
+        isAuthenticated: true,
+        userId: userId,
+        generation: generation,
+      );
 
   bool get needsRole => isAuthenticated && role == null;
 
@@ -32,10 +55,13 @@ class AppSession {
       other is AppSession &&
       other.role == role &&
       other.isAuthenticated == isAuthenticated &&
-      other.isRestoring == isRestoring;
+      other.isRestoring == isRestoring &&
+      other.userId == userId &&
+      other.generation == generation;
 
   @override
-  int get hashCode => Object.hash(role, isAuthenticated, isRestoring);
+  int get hashCode =>
+      Object.hash(role, isAuthenticated, isRestoring, userId, generation);
   bool get canAccessPatient => role == UserRole.patient;
   bool get canAccessCaregiver => role == UserRole.caregiver;
 }

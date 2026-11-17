@@ -37,6 +37,8 @@ class AuthService {
 
   Session? get currentSession => _client.auth.currentSession;
 
+  String? get currentUserId => _client.auth.currentUser?.id;
+
   /// Returns null when the account still needs to choose a role.
   Future<UserRole?> signInWithPassword({
     required String email,
