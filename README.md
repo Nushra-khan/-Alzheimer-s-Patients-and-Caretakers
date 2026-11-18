@@ -265,7 +265,7 @@ Before distributing Memora to real users:
 - Implement and verify push-notification delivery for background alerts.
 - Complete privacy, consent, data-retention, account-deletion, and incident-response policies.
 - Test accessibility, offline/error states, and the full SOS workflow on real devices.
-- Perform a security review before handling real health or precise-location data.
+- Perform a security review before handling real health or precise-location data..
 
 For the broader scope, architecture decisions, and release gates, see
 [PLAN.md](PLAN.md).
