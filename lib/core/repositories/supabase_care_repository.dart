@@ -582,6 +582,26 @@ class SupabaseCareRepository implements CareRepository {
     };
     final location = result['location'] as Map<String, dynamic>?;
     final zone = result['safe_zone'] as Map<String, dynamic>?;
+    Map<String, dynamic>? zoneConfiguration;
+    String configuredByName = 'Legacy setup';
+    if (zone != null) {
+      zoneConfiguration = await _client
+          .from('safe_zones')
+          .select('configured_by_profile_id, configured_at')
+          .eq('id', zone['id'] as String)
+          .maybeSingle();
+      final configuredById =
+          zoneConfiguration?['configured_by_profile_id'] as String?;
+      if (configuredById != null) {
+        final profile = await _client
+            .from('profiles')
+            .select('display_name')
+            .eq('id', configuredById)
+            .maybeSingle();
+        configuredByName =
+            profile?['display_name'] as String? ?? 'Authorized user';
+      }
+    }
     return LocationStatus(
       state: state,
       sharingEnabled: result['sharing_enabled'] as bool? ?? false,
@@ -606,6 +626,8 @@ class SupabaseCareRepository implements CareRepository {
               centerLongitude: (zone['longitude'] as num).toDouble(),
               isPatientInside: state != LocationState.outside,
               lastChecked: _parseTime(zone['updated_at']) ?? DateTime.now(),
+              configuredByName: configuredByName,
+              configuredAt: _parseTime(zoneConfiguration?['configured_at']),
             ),
     );
   }

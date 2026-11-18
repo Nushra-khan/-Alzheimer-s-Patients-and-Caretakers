@@ -475,6 +475,16 @@ void main() {
     );
     expect(tester.widget<IconButton>(safeZoneButton).onPressed, isNull);
   });
+
+  testWidgets('location view identifies who configured Home', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: LocationScreen())),
+    );
+
+    expect(find.textContaining('Set by Demo caregiver on'), findsOneWidget);
+  });
 }
 
 PatientModel _offlinePatient() => PatientModel(

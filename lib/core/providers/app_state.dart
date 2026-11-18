@@ -1029,6 +1029,8 @@ class SafeZoneNotifier extends StateNotifier<SafeZoneModel> {
                 lastChecked: DateTime.now().subtract(
                   const Duration(minutes: 5),
                 ),
+                configuredByName: 'Demo caregiver',
+                configuredAt: DateTime.now().subtract(const Duration(days: 30)),
               )
             : SafeZoneModel(
                 id: '',
@@ -1079,6 +1081,8 @@ class SafeZoneNotifier extends StateNotifier<SafeZoneModel> {
       centerLongitude: longitude,
       isPatientInside: state.isPatientInside,
       lastChecked: DateTime.now(),
+      configuredByName: 'You',
+      configuredAt: DateTime.now(),
     );
   }
 
@@ -1087,7 +1091,11 @@ class SafeZoneNotifier extends StateNotifier<SafeZoneModel> {
       safeZoneId: state.id,
       radiusMeters: newRadius,
     );
-    state = state.copyWith(radiusMeters: newRadius);
+    state = state.copyWith(
+      radiusMeters: newRadius,
+      configuredByName: 'You',
+      configuredAt: DateTime.now(),
+    );
   }
 
   void togglePatientInside() {

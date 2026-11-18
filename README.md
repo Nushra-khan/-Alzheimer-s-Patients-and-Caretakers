@@ -130,7 +130,7 @@ role key in the Flutter app or commit it to source control.
    ```
 
    The remote column in `migration list` should contain every local migration
-   from `0001` through `0018`.
+   from `0001` through `0019`.
 
 3. Check the resulting database schema:
 
@@ -248,6 +248,7 @@ flutter build appbundle --release --dart-define-from-file=config/production.json
 | `0016_location_tracking.sql` | Records patient locations, checks the safe zone, raises safe-zone exit and device-offline alerts, and lets caregivers create or move the safe zone |
 | `0017_medication_time_updates.sql` | Lets caregivers change a medication's daily time and moves today's pending dose |
 | `0018_profiles_and_account_deletion.sql` | Adds patient profile details, caregiver profiles, private profile photos (storage bucket and policies), and secure account deletion |
+| `0019_safe_zone_attribution.sql` | Records who configured the active Home safe zone and when it was changed |
 
 Never edit a migration that has already been applied to a shared environment.
 Create a new numbered migration for every schema or policy change.

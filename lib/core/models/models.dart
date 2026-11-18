@@ -337,6 +337,8 @@ class SafeZoneModel {
   final double centerLongitude;
   final bool isPatientInside;
   final DateTime lastChecked;
+  final String configuredByName;
+  final DateTime? configuredAt;
 
   SafeZoneModel({
     required this.id,
@@ -346,6 +348,8 @@ class SafeZoneModel {
     required this.centerLongitude,
     required this.isPatientInside,
     required this.lastChecked,
+    this.configuredByName = 'Unknown',
+    this.configuredAt,
   });
 
   SafeZoneModel copyWith({
@@ -356,6 +360,8 @@ class SafeZoneModel {
     double? centerLongitude,
     bool? isPatientInside,
     DateTime? lastChecked,
+    String? configuredByName,
+    DateTime? configuredAt,
   }) {
     return SafeZoneModel(
       id: id ?? this.id,
@@ -365,6 +371,8 @@ class SafeZoneModel {
       centerLongitude: centerLongitude ?? this.centerLongitude,
       isPatientInside: isPatientInside ?? this.isPatientInside,
       lastChecked: lastChecked ?? this.lastChecked,
+      configuredByName: configuredByName ?? this.configuredByName,
+      configuredAt: configuredAt ?? this.configuredAt,
     );
   }
 }

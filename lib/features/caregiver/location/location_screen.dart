@@ -251,6 +251,11 @@ class _LocationScreenState extends ConsumerState<LocationScreen> {
                 'You will get an alert when the patient leaves this area.',
                 style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
               ),
+              const SizedBox(height: 8),
+              const Text(
+                'Your caregiver identity and the time of this change will be recorded.',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
             ],
           ),
           actions: [
@@ -599,10 +604,22 @@ class _ZoneCard extends StatelessWidget {
               hasSafeZone
                   ? 'Radius: ${safeZone.radiusMeters.round()} m • '
                         'Long-press the map to move it.'
-                  : 'Long-press the map where the patient lives, or use '
-                        'their current location.',
+                  : 'An authorized caregiver must set Home. Long-press the '
+                        'map where the patient lives, or use their current '
+                        'location.',
               style: const TextStyle(color: AppTheme.textSecondary),
             ),
+            if (hasSafeZone) ...[
+              const SizedBox(height: 4),
+              Text(
+                _configuredByText(safeZone),
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             if (!hasSafeZone) ...[
               const SizedBox(height: 10),
               FilledButton.icon(
@@ -630,4 +647,14 @@ class _ZoneCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _configuredByText(SafeZoneModel safeZone) {
+  final configuredAt = safeZone.configuredAt;
+  if (configuredAt == null) return 'Set by ${safeZone.configuredByName}';
+  final local = configuredAt.toLocal();
+  final date =
+      '${local.day.toString().padLeft(2, '0')}/'
+      '${local.month.toString().padLeft(2, '0')}/${local.year}';
+  return 'Set by ${safeZone.configuredByName} on $date';
 }
